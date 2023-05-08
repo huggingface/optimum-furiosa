@@ -14,33 +14,15 @@
 
 from typing import Dict, List, Optional, Union
 
-import torch
-
 from optimum.configuration_utils import BaseConfig
 
 
-DEFAULT_QUANTIZATION_CONFIG = {
-    "algorithm": "quantization",
-    "preset": "mixed",
-    "overflow_fix": "disable",
-    "initializer": {
-        "range": {"num_init_samples": 300, "type": "mean_min_max"},
-        "batchnorm_adaptation": {"num_bn_adaptation_samples": 0},
-    },
-    "scope_overrides": {"activations": {"{re}.*matmul_0": {"mode": "symmetric"}}},
-    "ignored_scopes": [
-        "{re}.*Embedding*",
-        "{re}.*__add___[0-1]",
-        "{re}.*layer_norm_0",
-        "{re}.*matmul_1",
-        "{re}.*__truediv__*",
-    ],
-}
+DEFAULT_QUANTIZATION_CONFIG = {}
 
 
 class FuriosaAIConfig(BaseConfig):
-    CONFIG_NAME = "furiosaai_config.json"
-    FULL_CONFIGURATION_FILE = "furiosaai_config.json"
+    CONFIG_NAME = "furiosa_config.json"
+    FULL_CONFIGURATION_FILE = "furiosa_config.json"
 
     def __init__(
         self,
@@ -55,25 +37,3 @@ class FuriosaAIConfig(BaseConfig):
         self.save_onnx_model = save_onnx_model
         self._enable_standard_onnx_export_option()
         self.optimum_version = kwargs.pop("optimum_version", None)
-
-    def add_input_info(self, model_inputs: Dict):
-        self.input_info = [
-            {
-                "sample_size": list(value.shape),
-                "type": "long" if value.dtype is torch.int64 else "float",
-                "keyword": name,
-            }
-            for name, value in model_inputs.items()
-        ]
-
-    def _enable_standard_onnx_export_option(self):
-        # This method depends on self.save_onnx_model.
-        # save_onnx_model is defaulted to false so that the final model output is
-        # in OpenVINO IR to realize performance benefit in OpenVINO runtime.
-        # True value of save_onnx_model will save a model in onnx format.
-        if isinstance(self.compression, dict) and self.compression["algorithm"] == "quantization":
-            self.compression["export_to_onnx_standard_ops"] = self.save_onnx_model
-        elif isinstance(self.compression, list):
-            for i, algo_config in enumerate(self.compression):
-                if algo_config["algorithm"] == "quantization":
-                    self.compression[i]["export_to_onnx_standard_ops"] = self.save_onnx_model

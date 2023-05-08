@@ -72,9 +72,7 @@ class FuriosaAIBaseModel(OptimizedModel):
         # self.input_names = {key.get_any_name(): idx for idx, key in enumerate(model.inputs)}
         self.model = model
         self.sess = None
-        from pdb import set_trace
 
-        set_trace()
         if enable_compilation:
             self.compile()
 

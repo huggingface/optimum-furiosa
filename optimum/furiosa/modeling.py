@@ -149,9 +149,6 @@ class FuriosaAIModelForImageClassification(FuriosaAIModel):
         pixel_values: Union[torch.Tensor, np.ndarray],
         **kwargs,
     ):
-        from pdb import set_trace
-
-        set_trace()
         self.compile()
 
         np_inputs = isinstance(pixel_values, np.ndarray)
