@@ -12,8 +12,17 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-# from .configuration import FuriosaAIConfig
-# from .quantization import FuriosaAIQuantizer
-from .modeling import (
-    FuriosaAIModelForImageClassification,
-)
+
+FAI_ENF_FILE_NAME = "furiosa_model.enf"
+
+ONNX_WEIGHTS_NAME = "model.onnx"
+ONNX_WEIGHTS_NAME_DYNAMIC_AXIS = "model_dynamic.onnx"
+
+MAX_ONNX_OPSET_2022_2_0 = 10
+MAX_ONNX_OPSET = 13
+MIN_ONNX_QDQ_OPSET = 13
+
+
+_HEAD_TO_AUTOMODELS = {
+    "image-classification": "FuriosaAIModelForImageClassification",
+}

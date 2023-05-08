@@ -149,6 +149,9 @@ class FuriosaAIModelForImageClassification(FuriosaAIModel):
         pixel_values: Union[torch.Tensor, np.ndarray],
         **kwargs,
     ):
+        from pdb import set_trace
+
+        set_trace()
         self.compile()
 
         np_inputs = isinstance(pixel_values, np.ndarray)
@@ -157,5 +160,5 @@ class FuriosaAIModelForImageClassification(FuriosaAIModel):
 
         # Run inference
         outputs = self.sess.run(pixel_values)
-        logits = torch.from_numpy(outputs["logits"]) if not np_inputs else outputs[0]
+        logits = torch.from_numpy(outputs[0].numpy()) if not np_inputs else outputs[0].numpy()
         return ImageClassifierOutput(logits=logits)

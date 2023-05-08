@@ -65,30 +65,18 @@ class FuriosaAIBaseModel(OptimizedModel):
     ):
         self.config = config
         self.model_save_dir = model_save_dir
-        self._device = device.upper()
         self.furiosa_config = furiosa_config
         self.preprocessors = kwargs.get("preprocessors", [])
         enable_compilation = kwargs.get("compile", True)
 
-        self.input_names = {key.get_any_name(): idx for idx, key in enumerate(model.inputs)}
+        # self.input_names = {key.get_any_name(): idx for idx, key in enumerate(model.inputs)}
         self.model = model
+        self.sess = None
+        from pdb import set_trace
+
+        set_trace()
         if enable_compilation:
             self.compile()
-
-    @staticmethod
-    def load_model(file_name: Union[str, Path]):
-        """
-        Loads the model.
-
-        Arguments:
-            file_name (`str` or `Path`):
-                The path of the model ONNX or XML file.
-        """
-        if isinstance(file_name, str):
-            file_name = Path(file_name)
-        file_name.with_suffix(".bin") if file_name.suffix == ".xml" else None
-        return 0
-        # return core.read_model(file_name, bin_file_name)
 
     def _save_pretrained(self, save_directory: Union[str, Path], file_name: Optional[str] = None, **kwargs):
         pass
@@ -139,19 +127,14 @@ class FuriosaAIBaseModel(OptimizedModel):
         # Load the model from local directory
         if os.path.isdir(model_id):
             file_name = os.path.join(model_id, file_name)
-            if os.path.isfile(os.path.join(model_id, "ov_model.xml")):
-                file_name = os.path.join(model_id, "ov_model.xml")
-                logger.warning(
-                    "The file names `ov_model.xml` and `ov_model.bin` will be soon deprecated."
-                    "Make sure to rename your file to respectively `openvino_model.xml` and `openvino_model.bin`"
-                )
-            model = cls.load_model(file_name)
+            if os.path.isfile(os.path.join(model_id, ONNX_WEIGHTS_NAME)):
+                file_name = os.path.join(model_id, ONNX_WEIGHTS_NAME)
+
+            model = file_name
             model_save_dir = model_id
         # Download the model from the hub
         else:
             model_file_names = [file_name]
-            if not from_onnx:
-                model_file_names.append(file_name.replace(".xml", ".bin"))
             file_names = []
             try:
                 for file_name in model_file_names:
@@ -168,7 +151,7 @@ class FuriosaAIBaseModel(OptimizedModel):
             except EntryNotFoundError:
                 file_names = []
             model_save_dir = Path(model_cache_path).parent
-            model = cls.load_model(file_names[0])
+            model = file_names[0]
         return cls(model, config=config, model_save_dir=model_save_dir, **kwargs)
 
     @classmethod
@@ -293,6 +276,8 @@ class FuriosaAIBaseModel(OptimizedModel):
         self.model = self._reshape(self.model, batch_size, sequence_length, height, width)
         self.sess = None
         return self
+
+    # def fix_onnx_static_shape(self, )
 
     def forward(self, *args, **kwargs):
         raise NotImplementedError
