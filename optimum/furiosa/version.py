@@ -1,4 +1,4 @@
-#  Copyright 2022 The HuggingFace Team. All rights reserved.
+#  Copyright 2021 The HuggingFace Team. All rights reserved.
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -12,9 +12,4 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-# from .configuration import FuriosaAIConfig
-# from .quantization import FuriosaAIQuantizer
-from .modeling import (
-    FuriosaAIModelForImageClassification,
-)
-from .utils import OV_DECODER_NAME, OV_DECODER_WITH_PAST_NAME, OV_ENCODER_NAME, OV_XML_FILE_NAME
+__version__ = "0.1.0.dev0"

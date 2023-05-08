@@ -18,46 +18,35 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Dict, Optional, Union
 
-import openvino
 from huggingface_hub import hf_hub_download
 from huggingface_hub.utils import EntryNotFoundError
-from openvino._offline_transformations import apply_moc_transformations, compress_model_transformation
-from openvino.runtime import Core
 from transformers import PretrainedConfig
 from transformers.file_utils import add_start_docstrings
 
+# Import Furiosa SDK
+from furiosa.runtime import session
 from optimum.exporters import TasksManager
 from optimum.exporters.onnx import export
 from optimum.modeling_base import OptimizedModel
 
-from ..utils.import_utils import is_transformers_version
-from .utils import ONNX_WEIGHTS_NAME, OV_XML_FILE_NAME
+from .utils import ONNX_WEIGHTS_NAME
 
 
-if is_transformers_version("<", "4.25.0"):
-    from transformers.generation_utils import GenerationMixin
-else:
-    from transformers.generation import GenerationMixin
-
-core = Core()
+# if is_transformers_version("<", "4.25.0"):
+#     from transformers.generation_utils import GenerationMixin
+# else:
+#     from transformers.generation import GenerationMixin
 
 logger = logging.getLogger(__name__)
 
 _SUPPORTED_DEVICES = {
-    "CPU",
-    "GPU",
-    "AUTO",
-    "AUTO:CPU,GPU",
-    "AUTO:GPU,CPU",
-    "MULTI",
-    "MULTI:CPU,GPU",
-    "MULTI:GPU,CPU",
+    "WARBOY",
 }
 
 
 @add_start_docstrings(
     """
-    Base OVModel class.
+    Base FuriosaAIModel class.
     """,
 )
 class FuriosaAIBaseModel(OptimizedModel):
@@ -69,7 +58,7 @@ class FuriosaAIBaseModel(OptimizedModel):
         self,
         model,
         config: PretrainedConfig = None,
-        device: str = "NPU",
+        device: str = None,
         furiosa_config: Optional[Dict[str, str]] = None,
         model_save_dir: Optional[Union[str, Path, TemporaryDirectory]] = None,
         **kwargs,
@@ -77,7 +66,7 @@ class FuriosaAIBaseModel(OptimizedModel):
         self.config = config
         self.model_save_dir = model_save_dir
         self._device = device.upper()
-        self.furiosaai_config = furiosaai_config
+        self.furiosa_config = furiosa_config
         self.preprocessors = kwargs.get("preprocessors", [])
         enable_compilation = kwargs.get("compile", True)
 
@@ -97,24 +86,12 @@ class FuriosaAIBaseModel(OptimizedModel):
         """
         if isinstance(file_name, str):
             file_name = Path(file_name)
-        bin_file_name = file_name.with_suffix(".bin") if file_name.suffix == ".xml" else None
-
-        return core.read_model(file_name, bin_file_name)
+        file_name.with_suffix(".bin") if file_name.suffix == ".xml" else None
+        return 0
+        # return core.read_model(file_name, bin_file_name)
 
     def _save_pretrained(self, save_directory: Union[str, Path], file_name: Optional[str] = None, **kwargs):
-        """
-        Saves the model to the OpenVINO IR format so that it can be re-loaded using the
-        [`~optimum.intel.openvino.modeling.OVModel.from_pretrained`] class method.
-
-        Arguments:
-            save_directory (`str` or `Path`):
-                The directory where to save the model files.
-            file_name(`str`, *optional*):
-                The model file name to use when saving the model. Overwrites the default file names.
-        """
-        file_name = file_name if file_name is not None else OV_XML_FILE_NAME
-        dst_path = os.path.join(save_directory, file_name)
-        openvino.runtime.serialize(self.model, dst_path, dst_path.replace(".xml", ".bin"))
+        pass
 
     @classmethod
     def _from_pretrained(
@@ -156,7 +133,7 @@ class FuriosaAIBaseModel(OptimizedModel):
             local_files_only(`bool`, *optional*, defaults to `False`):
                 Whether or not to only look at local files (i.e., do not try to download the model).
         """
-        default_file_name = ONNX_WEIGHTS_NAME if from_onnx else OV_XML_FILE_NAME
+        default_file_name = ONNX_WEIGHTS_NAME
         file_name = file_name or default_file_name
 
         # Load the model from local directory
@@ -173,7 +150,6 @@ class FuriosaAIBaseModel(OptimizedModel):
         # Download the model from the hub
         else:
             model_file_names = [file_name]
-            # If not ONNX then OpenVINO IR
             if not from_onnx:
                 model_file_names.append(file_name.replace(".xml", ".bin"))
             file_names = []
@@ -191,22 +167,6 @@ class FuriosaAIBaseModel(OptimizedModel):
                     file_names.append(model_cache_path)
             except EntryNotFoundError:
                 file_names = []
-                model_file_names = ["ov_model.xml", "ov_model.bin"]
-                for file_name in model_file_names:
-                    model_cache_path = hf_hub_download(
-                        repo_id=model_id,
-                        filename=file_name,
-                        use_auth_token=use_auth_token,
-                        revision=revision,
-                        cache_dir=cache_dir,
-                        force_download=force_download,
-                        local_files_only=local_files_only,
-                    )
-                    file_names.append(model_cache_path)
-                logger.warning(
-                    "The file names `ov_model.xml` and `ov_model.bin` will be soon deprecated."
-                    "Make sure to rename your file to respectively `openvino_model.xml` and `openvino_model.bin`"
-                )
             model_save_dir = Path(model_cache_path).parent
             model = cls.load_model(file_names[0])
         return cls(model, config=config, model_save_dir=model_save_dir, **kwargs)
@@ -291,16 +251,13 @@ class FuriosaAIBaseModel(OptimizedModel):
         )
 
     def compile(self):
-        if self.request is None:
-            logger.info("Compiling the model and creating the inference request ...")
-            cache_dir = Path(self.model_save_dir).joinpath("model_cache")
-            ov_config = {**self.ov_config, "CACHE_DIR": str(cache_dir)}
-            compiled_model = core.compile_model(self.model, self._device, ov_config)
-            self.request = compiled_model.create_infer_request()
+        if self.sess is None:
+            logger.info("Compiling the model and creating the session ...")
+            self.sess = session.create(self.model)
 
     def _reshape(
         self,
-        model: openvino.runtime.Model,
+        model,
         batch_size: int,
         sequence_length: int,
         height: int = None,
@@ -334,22 +291,8 @@ class FuriosaAIBaseModel(OptimizedModel):
         """
         self.is_dynamic = True if batch_size == -1 and sequence_length == -1 else False
         self.model = self._reshape(self.model, batch_size, sequence_length, height, width)
-        self.request = None
+        self.sess = None
         return self
-
-    def half(self):
-        """
-        Converts all the model weights to FP16
-        """
-        apply_moc_transformations(self.model, cf=False)
-        compress_model_transformation(self.model)
-        self.request = None
-        return self
-
-    def _ensure_supported_device(self, device: str = None):
-        device = device if device is not None else self._device
-        if device not in _SUPPORTED_DEVICES:
-            raise ValueError(f"Unknown device: {device}. Expected one of {_SUPPORTED_DEVICES}.")
 
     def forward(self, *args, **kwargs):
         raise NotImplementedError
@@ -361,10 +304,10 @@ class FuriosaAIBaseModel(OptimizedModel):
         """
         return cls._AUTOMODELS_TO_TASKS[auto_model_class.__name__]
 
-    def can_generate(self) -> bool:
-        """
-        Returns whether this model can generate sequences with `.generate()`.
-        """
-        if isinstance(self, GenerationMixin):
-            return True
-        return False
+    # def can_generate(self) -> bool:
+    #     """
+    #     Returns whether this model can generate sequences with `.generate()`.
+    #     """
+    #     if isinstance(self, GenerationMixin):
+    #         return True
+    #     return False

@@ -12,9 +12,20 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-# from .configuration import FuriosaAIConfig
-# from .quantization import FuriosaAIQuantizer
-from .modeling import (
-    FuriosaAIModelForImageClassification,
-)
-from .utils import OV_DECODER_NAME, OV_DECODER_WITH_PAST_NAME, OV_ENCODER_NAME, OV_XML_FILE_NAME
+[tool.black]
+line-length = 119
+target-version = ['py37']
+
+[tool.ruff]
+# Never enforce `E501` (line length violations).
+ignore = ["C901", "E501", "E741", "W605"]
+select = ["C", "E", "F", "I", "W"]
+line-length = 119
+
+# Ignore import violations in all `__init__.py` files.
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["E402", "F401", "F403", "F811"]
+
+[tool.ruff.isort]
+lines-after-imports = 2
+known-first-party = ["optimum"]
