@@ -16,7 +16,7 @@
 FAI_ENF_FILE_NAME = "furiosa_model.enf"
 
 ONNX_WEIGHTS_NAME = "model.onnx"
-ONNX_WEIGHTS_NAME_DYNAMIC_AXIS = "model_dynamic.onnx"
+ONNX_WEIGHTS_NAME_STATIC = "model_static.onnx"
 
 MAX_ONNX_OPSET_2022_2_0 = 10
 MAX_ONNX_OPSET = 13

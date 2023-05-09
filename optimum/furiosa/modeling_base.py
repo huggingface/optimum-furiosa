@@ -16,8 +16,9 @@ import logging
 import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Dict, Optional, Union
+from typing import Dict, Optional, Tuple, Union
 
+import onnx
 from huggingface_hub import hf_hub_download
 from huggingface_hub.utils import EntryNotFoundError
 from transformers import PretrainedConfig
@@ -29,7 +30,7 @@ from optimum.exporters import TasksManager
 from optimum.exporters.onnx import export
 from optimum.modeling_base import OptimizedModel
 
-from .utils import ONNX_WEIGHTS_NAME
+from .utils import ONNX_WEIGHTS_NAME, ONNX_WEIGHTS_NAME_STATIC
 
 
 # if is_transformers_version("<", "4.25.0"):
@@ -61,20 +62,34 @@ class FuriosaAIBaseModel(OptimizedModel):
         device: str = None,
         furiosa_config: Optional[Dict[str, str]] = None,
         model_save_dir: Optional[Union[str, Path, TemporaryDirectory]] = None,
+        input_shape_dict: Optional[Dict[str, Tuple[int]]] = None,
+        output_shape_dict: Optional[Dict[str, Tuple[int]]] = None,
         **kwargs,
     ):
         self.config = config
         self.model_save_dir = model_save_dir
         self.furiosa_config = furiosa_config
-        self.preprocessors = kwargs.get("preprocessors", [])
         enable_compilation = kwargs.get("compile", True)
 
-        # self.input_names = {key.get_any_name(): idx for idx, key in enumerate(model.inputs)}
         self.model = model
         self.sess = None
 
+        self.is_dynamic = self._check_is_dynamic(self.model)
+
         if enable_compilation:
+            if self.is_dynamic:
+                self._reshape(self.model, input_shape_dict, output_shape_dict)
             self.compile()
+
+    def _check_is_dynamic(self, model_path):
+        has_dynamic = False
+        if model_path.endswith(".onnx"):
+            model = onnx.load(model_path)
+            has_dynamic = any(
+                any(dim.dim_param for dim in inp.type.tensor_type.shape.dim) for inp in model.graph.input
+            )
+
+        return has_dynamic
 
     def _save_pretrained(self, save_directory: Union[str, Path], file_name: Optional[str] = None, **kwargs):
         pass
@@ -238,25 +253,10 @@ class FuriosaAIBaseModel(OptimizedModel):
 
     def _reshape(
         self,
-        model,
-        batch_size: int,
-        sequence_length: int,
-        height: int = None,
-        width: int = None,
+        model_path,
+        input_shape_dict,
+        output_shape_dict,
     ):
-        shapes = {}
-        for inputs in model.inputs:
-            shapes[inputs] = inputs.get_partial_shape()
-            shapes[inputs][0] = batch_size
-            shapes[inputs][1] = sequence_length
-            if height is not None:
-                shapes[inputs][2] = height
-            if width is not None:
-                shapes[inputs][3] = width
-        model.reshape(shapes)
-        return model
-
-    def reshape(self, batch_size: int, sequence_length: int, height: int = None, width: int = None):
         """
         Propagates the given input shapes on the model's layers, fixing the inputs shapes of the model.
 
@@ -270,12 +270,21 @@ class FuriosaAIBaseModel(OptimizedModel):
             width (`int`, *optional*):
                 The image width.
         """
-        self.is_dynamic = True if batch_size == -1 and sequence_length == -1 else False
-        self.model = self._reshape(self.model, batch_size, sequence_length, height, width)
-        self.sess = None
-        return self
+        if model_path.endswith(".onnx"):
+            if input_shape_dict is None or output_shape_dict is None:
+                raise ValueError(
+                    "The model provided has dynamic axes in input / output, please provide input and output shapes for compilation!"
+                )
+            from onnx import shape_inference
+            from onnx.tools import update_model_dims
 
-    # def fix_onnx_static_shape(self, )
+            model = onnx.load(model_path)
+            updated_model = update_model_dims.update_inputs_outputs_dims(model, input_shape_dict, output_shape_dict)
+            inferred_model = shape_inference.infer_shapes(updated_model)
+
+            static_model_path = Path(model_path).parent / ONNX_WEIGHTS_NAME_STATIC
+            onnx.save(inferred_model, static_model_path)
+            self.model = static_model_path
 
     def forward(self, *args, **kwargs):
         raise NotImplementedError
@@ -286,11 +295,3 @@ class FuriosaAIBaseModel(OptimizedModel):
         Get the task corresponding to a class (for example AutoModelForXXX in transformers).
         """
         return cls._AUTOMODELS_TO_TASKS[auto_model_class.__name__]
-
-    # def can_generate(self) -> bool:
-    #     """
-    #     Returns whether this model can generate sequences with `.generate()`.
-    #     """
-    #     if isinstance(self, GenerationMixin):
-    #         return True
-    #     return False
