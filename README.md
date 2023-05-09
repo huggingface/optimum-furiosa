@@ -2,7 +2,7 @@
 Accelerated inference of 🤗 models using FuriosaAI NPU chips. 
 
 ## Furiosa SDK setup
-A Furiosa SDK environment needs to be enabled to use this library. Please refer to Furiosa's [Getting Started](https://furiosa-ai.github.io/docs/v0.5.0/en/installation/prerequisites.html#) guide.
+A Furiosa SDK environment needs to be enabled to use this library. Please refer to Furiosa's [Installation](https://furiosa-ai.github.io/docs/v0.5.0/en/installation/prerequisites.html#) guide.
 
 ## Install
 Optimum Furiosa is a fast-moving project, and you may want to install from source.
