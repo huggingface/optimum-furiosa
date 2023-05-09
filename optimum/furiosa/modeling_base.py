@@ -162,7 +162,7 @@ class FuriosaAIBaseModel(OptimizedModel):
                     )
                     file_names.append(model_cache_path)
             except EntryNotFoundError:
-                file_names = []
+                raise
             model_save_dir = Path(model_cache_path).parent
             model = file_names[0]
         return cls(model, config=config, model_save_dir=model_save_dir, **kwargs)
