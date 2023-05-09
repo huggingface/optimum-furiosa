@@ -26,7 +26,7 @@ Now whenever you change the code, you'll be able to run with those changes insta
 ## How to use it?
 To load a model and run inference with Furiosa NPU, you can just replace your `AutoModelForXxx` class with the corresponding `FuriosaAIModelForXxx` class. 
 
-```python
+```diff
 import requests
 from PIL import Image
 
