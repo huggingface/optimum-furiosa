@@ -11,8 +11,8 @@ Optimum Furiosa is a fast-moving project, and you may want to install from sourc
 
 ### Installing in developer mode
 
-If you are working on the `optimum-graphcore` code then you should use an editable install
-by cloning and installing `optimum` and `optimum-graphcore`:
+If you are working on the `optimum-furiosa` code then you should use an editable install
+by cloning and installing `optimum` and `optimum-furiosa`:
 
 ```
 git clone https://github.com/huggingface/optimum
