@@ -40,7 +40,7 @@ MODEL_START_DOCSTRING = r"""
     This model inherits from [`optimum.furiosa.FuriosaAIBaseModel`]. Check the superclass documentation for the generic methods the
     library implements for all its model (such as downloading or saving)
     Parameters:
-        model (`str,furiosa.runtime.model`): is the main class used to run inference.
+        model (`furiosa.runtime.model`): is the main class used to run inference.
         config (`transformers.PretrainedConfig`): [PretrainedConfig](https://huggingface.co/docs/transformers/main_classes/configuration#transformers.PretrainedConfig)
             is the Model configuration class with all the parameters of the model.
             Initializing with a config file does not load the weights associated with the model, only the configuration.
@@ -92,7 +92,7 @@ IMAGE_CLASSIFICATION_EXAMPLE = r"""
     >>> from optimum.furiosa import {model_class}
 
     >>> preprocessor = {processor_class}.from_pretrained("{checkpoint}")
-    >>> model = {model_class}.from_pretrained("{checkpoint}", export=True, input_shape_dict={"pixel_values": [1, 3, 224, 224]}, output_shape_dict={"logits": [1, 1000]},)
+    >>> model = {model_class}.from_pretrained("{checkpoint}", export=True, input_shape_dict="{"pixel_values": [1, 3, 224, 224]}", output_shape_dict="{"logits": [1, 1000]}",)
     >>> pipe = pipeline("image-classification", model=model, feature_extractor=preprocessor)
     >>> url = "http://images.cocodataset.org/val2017/000000039769.jpg"
     >>> outputs = pipe(url)
