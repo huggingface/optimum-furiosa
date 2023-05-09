@@ -34,45 +34,23 @@ from .modeling_base import FuriosaAIBaseModel
 logger = logging.getLogger(__name__)
 
 
-_TOKENIZER_FOR_DOC = "AutoTokenizer"
 _FEATURE_EXTRACTOR_FOR_DOC = "AutoFeatureExtractor"
 
 MODEL_START_DOCSTRING = r"""
-    This model inherits from [`optimum.intel.openvino.modeling.OVBaseModel`]. Check the superclass documentation for the generic methods the
+    This model inherits from [`optimum.furiosa.FuriosaAIBaseModel`]. Check the superclass documentation for the generic methods the
     library implements for all its model (such as downloading or saving)
     Parameters:
-        model (`openvino.runtime.Model`): is the main class used to run OpenVINO Runtime inference.
+        model (`str,furiosa.runtime.model`): is the main class used to run inference.
         config (`transformers.PretrainedConfig`): [PretrainedConfig](https://huggingface.co/docs/transformers/main_classes/configuration#transformers.PretrainedConfig)
             is the Model configuration class with all the parameters of the model.
             Initializing with a config file does not load the weights associated with the model, only the configuration.
-            Check out the [`~intel.openvino.modeling.OVBaseModel.from_pretrained`] method to load the model weights.
+            Check out the [`~furiosa.modeling.FuriosaAIBaseModel.from_pretrained`] method to load the model weights.
         device (`str`, defaults to `"CPU"`):
             The device type for which the model will be optimized for. The resulting compiled model will contains nodes specific to this device.
-        dynamic_shapes (`bool`, defaults to `True`):
-            All the model's dimension will be set to dynamic when set to `True`. Should be set to `False` for the model to not be dynamically reshaped by default.
-        ov_config (`Optional[Dict]`, defaults to `None`):
+        furiosa_config (`Optional[Dict]`, defaults to `None`):
             The dictionnary containing the informations related to the model compilation.
         compile (`bool`, defaults to `True`):
             Disable the model compilation during the loading step when set to `False`.
-            Can be useful to avoid unnecessary compilation, in the case where the model needs to be statically reshaped, the device modified or if FP16 conversion is enabled.
-"""
-
-INPUTS_DOCSTRING = r"""
-    Args:
-        input_ids (`torch.Tensor`):
-            Indices of input sequence tokens in the vocabulary.
-            Indices can be obtained using [`AutoTokenizer`](https://huggingface.co/docs/transformers/autoclass_tutorial#autotokenizer).
-            [What are input IDs?](https://huggingface.co/docs/transformers/glossary#input-ids)
-        attention_mask (`torch.Tensor`), *optional*):
-            Mask to avoid performing attention on padding token indices. Mask values selected in `[0, 1]`:
-            - 1 for tokens that are **not masked**,
-            - 0 for tokens that are **masked**.
-            [What are attention masks?](https://huggingface.co/docs/transformers/glossary#attention-mask)
-        token_type_ids (`torch.Tensor`, *optional*):
-            Segment token indices to indicate first and second portions of the inputs. Indices are selected in `[0, 1]`:
-            - 1 for tokens that are **sentence A**,
-            - 0 for tokens that are **sentence B**.
-            [What are token type IDs?](https://huggingface.co/docs/transformers/glossary#token-type-ids)
 """
 
 IMAGE_INPUTS_DOCSTRING = r"""
@@ -111,11 +89,10 @@ IMAGE_CLASSIFICATION_EXAMPLE = r"""
     Example of image classification using `transformers.pipelines`:
     ```python
     >>> from transformers import {processor_class}, pipeline
-    >>> from optimum.intel import {model_class}
+    >>> from optimum.furiosa import {model_class}
 
     >>> preprocessor = {processor_class}.from_pretrained("{checkpoint}")
-    >>> model = {model_class}.from_pretrained("{checkpoint}", export=True)
-    >>> model.reshape(batch_size=1, sequence_length=3, height=224, width=224)
+    >>> model = {model_class}.from_pretrained("{checkpoint}", export=True, input_shape_dict={"pixel_values": [1, 3, 224, 224]}, output_shape_dict={"logits": [1, 1000]},)
     >>> pipe = pipeline("image-classification", model=model, feature_extractor=preprocessor)
     >>> url = "http://images.cocodataset.org/val2017/000000039769.jpg"
     >>> outputs = pipe(url)
@@ -140,7 +117,7 @@ class FuriosaAIModelForImageClassification(FuriosaAIModel):
         IMAGE_INPUTS_DOCSTRING.format("batch_size, num_channels, height, width")
         + IMAGE_CLASSIFICATION_EXAMPLE.format(
             processor_class=_FEATURE_EXTRACTOR_FOR_DOC,
-            model_class="OVModelForImageClassification",
+            model_class="FuriosaAIModelForImageClassification",
             checkpoint="microsoft/resnet50",
         )
     )

@@ -25,6 +25,7 @@ from transformers import PretrainedConfig
 from transformers.file_utils import add_start_docstrings
 
 # Import Furiosa SDK
+import furiosa
 from furiosa.runtime import session
 from optimum.exporters import TasksManager
 from optimum.exporters.onnx import export
@@ -57,7 +58,7 @@ class FuriosaAIBaseModel(OptimizedModel):
 
     def __init__(
         self,
-        model,
+        model: furiosa.runtime.model,
         config: PretrainedConfig = None,
         device: str = None,
         furiosa_config: Optional[Dict[str, str]] = None,
