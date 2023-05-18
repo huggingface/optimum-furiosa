@@ -246,7 +246,7 @@ class FuriosaAIBaseModel(OptimizedModel):
 
         Arguments:
             enable_compilation (`bool`):
-                Enable compilation of the model.
+                Enable / disablecompilation of the model.
         """
         if enable_compilation and self.sess is None:
             self.is_dynamic = self._check_is_dynamic()
