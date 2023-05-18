@@ -41,10 +41,6 @@ from .utils import ONNX_WEIGHTS_NAME, ONNX_WEIGHTS_NAME_STATIC
 
 logger = logging.getLogger(__name__)
 
-_SUPPORTED_DEVICES = {
-    "WARBOY",
-}
-
 
 @add_start_docstrings(
     """
@@ -75,17 +71,14 @@ class FuriosaAIBaseModel(OptimizedModel):
         self.model = model
         self.sess = None
 
-        self.is_dynamic = self._check_is_dynamic(self.model)
+        self.input_shape_dict = input_shape_dict
+        self.output_shape_dict = output_shape_dict
+        self.compile(enable_compilation)
 
-        if enable_compilation:
-            if self.is_dynamic:
-                self._reshape(self.model, input_shape_dict, output_shape_dict)
-            self.compile()
-
-    def _check_is_dynamic(self, model_path):
+    def _check_is_dynamic(self):
         has_dynamic = False
-        if model_path.endswith(".onnx"):
-            model = onnx.load(model_path)
+        if isinstance(self.model, str) and self.model.endswith(".onnx"):
+            model = onnx.load(self.model)
             has_dynamic = any(
                 any(dim.dim_param for dim in inp.type.tensor_type.shape.dim) for inp in model.graph.input
             )
@@ -247,8 +240,19 @@ class FuriosaAIBaseModel(OptimizedModel):
             **kwargs,
         )
 
-    def compile(self):
-        if self.sess is None:
+    def compile(self, enable_compilation=True):
+        """
+        Compiles the model to the Furiosa binary.
+
+        Arguments:
+            enable_compilation (`bool`):
+                Enable / disable compilation of the model.
+        """
+        if enable_compilation and self.sess is None:
+            self.is_dynamic = self._check_is_dynamic()
+            if self.is_dynamic:
+                self._reshape(self.model, self.input_shape_dict, self.output_shape_dict)
+
             logger.info("Compiling the model and creating the session ...")
             self.sess = session.create(self.model)
 
@@ -262,16 +266,14 @@ class FuriosaAIBaseModel(OptimizedModel):
         Propagates the given input shapes on the model's layers, fixing the inputs shapes of the model.
 
         Arguments:
-            batch_size (`int`):
-                The batch size.
-            sequence_length (`int`):
-                The sequence length or number of channels.
-            height (`int`, *optional*):
-                The image height.
-            width (`int`, *optional*):
-                The image width.
+            model_path (`int`):
+                Path to the model.
+            input_shape_dict (`int`):
+                Input shapes for the model.
+            output_shape_dict (`int`):
+                Output shapes for the model.
         """
-        if model_path.endswith(".onnx"):
+        if isinstance(model_path, str) and model_path.endswith(".onnx"):
             if input_shape_dict is None or output_shape_dict is None:
                 raise ValueError(
                     "The model provided has dynamic axes in input / output, please provide input and output shapes for compilation!"

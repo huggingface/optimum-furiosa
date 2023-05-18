@@ -92,7 +92,7 @@ IMAGE_CLASSIFICATION_EXAMPLE = r"""
     >>> from optimum.furiosa import {model_class}
 
     >>> preprocessor = {processor_class}.from_pretrained("{checkpoint}")
-    >>> model = {model_class}.from_pretrained("{checkpoint}", export=True, input_shape_dict="{"pixel_values": [1, 3, 224, 224]}", output_shape_dict="{"logits": [1, 1000]}",)
+    >>> model = {model_class}.from_pretrained("{checkpoint}", export=True, input_shape_dict="dict('pixel_values': [1, 3, 224, 224])", output_shape_dict="dict("logits": [1, 1000])",)
     >>> pipe = pipeline("image-classification", model=model, feature_extractor=preprocessor)
     >>> url = "http://images.cocodataset.org/val2017/000000039769.jpg"
     >>> outputs = pipe(url)
