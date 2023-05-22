@@ -16,21 +16,18 @@ import logging
 import os
 from collections import defaultdict
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Callable, Dict, Optional, Tuple, Union
 
 import onnx
 from datasets import Dataset, load_dataset
-from packaging.version import Version, parse
 from transformers import AutoConfig
 
-from .quantization_base import OptimumQuantizer
-from ..utils.save_utils import maybe_save_preprocessors
-from . import ORTQuantizableOperator
-from .configuration import CalibrationConfig, NodeName, NodeType, ORTConfig, QuantizationConfig
+from furiosa.quantizer import quantize
+
+from .configuration import CalibrationConfig, FuriosaAIConfig, QuantizationConfig
 from .modeling import FuriosaAIModel
-from .preprocessors import QuantizationPreprocessor
-from furiosa.optimizer import optimize_model
-from furiosa.quantizer import quantize, Calibrator, CalibrationMethod
+from .quantization_base import OptimumQuantizer
+
 
 if TYPE_CHECKING:
     from transformers import PretrainedConfig
@@ -38,7 +35,7 @@ if TYPE_CHECKING:
 LOGGER = logging.getLogger(__name__)
 
 
-class FuriosaAICalibrationDataReader(CalibrationDataReader):
+class FuriosaAICalibrationDataReader:
     __slots__ = ["batch_size", "dataset", "_dataset_iter"]
 
     def __init__(self, dataset: Dataset, batch_size: int = 1):
@@ -53,7 +50,7 @@ class FuriosaAICalibrationDataReader(CalibrationDataReader):
 
         self._dataset_iter = iter(self.dataset)
 
-    def get_next(self):
+    def __next__(self):
         featurized_samples = None
         try:
             if self.batch_size == 1:
@@ -73,6 +70,9 @@ class FuriosaAICalibrationDataReader(CalibrationDataReader):
             return featurized_samples
         return None
 
+    def __iter__(self):
+        return self
+
 
 class FuriosaAIQuantizer(OptimumQuantizer):
     """
@@ -88,7 +88,7 @@ class FuriosaAIQuantizer(OptimumQuantizer):
                 The configuration of the model.
         """
         super().__init__()
-        self.model_path = onnx_model_path
+        self.model_path = model_path
         self.config = config
         if self.config is None:
             try:
@@ -104,11 +104,11 @@ class FuriosaAIQuantizer(OptimumQuantizer):
     @classmethod
     def from_pretrained(
         cls,
-        model_or_path: Union["ORTModel", str, Path],
+        model_or_path: Union["FuriosaAIQuantizer", str, Path],
         file_name: Optional[str] = None,
-    ) -> "ORTQuantizer":
+    ) -> "FuriosaAIQuantizer":
         """
-        Instantiates a `ORTQuantizer` from a an ONNX model file or an `ORTModel`.
+        Instantiates a `FuriosaAIQuantizer` from a an ONNX model file or an `ORTModel`.
 
         Args:
             model_or_path (`Union[ORTModel, str, Path]`):
@@ -119,10 +119,9 @@ class FuriosaAIQuantizer(OptimumQuantizer):
                 Overwrites the default model file name from `"model.onnx"` to `file_name`.
                 This allows you to load different model files from the same repository or directory.
         Returns:
-            An instance of `ORTQuantizer`.
+            An instance of `FuriosaAIQuantizer`.
         """
-        ort_quantizer_error_message = "FuriosaAIQuantizer does not support multi-file quantization. Please create separate FuriosaAIQuantizer instances for each model/file, by passing the argument `file_name` to FuriosaAIQuantizer.from_pretrained()."
-
+        furiosa_quantizer_error_message = "FuriosaAIQuantizer does not support multi-file quantization. Please create separate FuriosaAIQuantizer instances for each model/file, by passing the argument `file_name` to FuriosaAIQuantizer.from_pretrained()."
 
         if isinstance(model_or_path, str):
             model_or_path = Path(model_or_path)
@@ -134,18 +133,22 @@ class FuriosaAIQuantizer(OptimumQuantizer):
                 raise FileNotFoundError(f"Could not find any model file in {model_or_path}")
             elif len(onnx_files) > 1:
                 raise RuntimeError(
-                    f"Found too many ONNX model files in {model_or_path}. {ort_quantizer_error_message}"
+                    f"Found too many ONNX model files in {model_or_path}. {furiosa_quantizer_error_message}"
                 )
             else:
-                raise ValueError("Currently, quantization of only ONNX files is supported using the optimum-furiosa repository!")
+                raise ValueError(
+                    "Currently, quantization of only ONNX files is supported using the optimum-furiosa repository!"
+                )
             file_name = onnx_files[0].name
 
         if isinstance(model_or_path, FuriosaAIModel):
             if path is None:
-                 if isinstance(model_or_path.model, str) and model_or_path.model.endswith(".onnx"):
-                     path = Path(model_or_path.model)
+                if isinstance(model_or_path.model, str) and model_or_path.model.endswith(".onnx"):
+                    path = Path(model_or_path.model)
             else:
-                raise ValueError("Currently, quantization of only ONNX files is supported using the optimum-furiosa repository!")
+                raise ValueError(
+                    "Currently, quantization of only ONNX files is supported using the optimum-furiosa repository!"
+                )
         elif os.path.isdir(model_or_path):
             path = Path(model_or_path) / file_name
         else:
@@ -157,11 +160,8 @@ class FuriosaAIQuantizer(OptimumQuantizer):
         dataset: Dataset,
         calibration_config: CalibrationConfig,
         onnx_augmented_model_name: Union[str, Path] = "augmented_model.onnx",
-        operators_to_quantize: Optional[List[NodeType]] = None,
         batch_size: int = 1,
         use_external_data_format: bool = False,
-        use_gpu: bool = False,
-        force_symmetric_range: bool = False,
     ) -> Dict[str, Tuple[float, float]]:
         """
         Performs the calibration step and computes the quantization ranges.
@@ -173,16 +173,10 @@ class FuriosaAIQuantizer(OptimumQuantizer):
                 The configuration containing the parameters related to the calibration step.
             onnx_augmented_model_name (`Union[str, Path]`, *optional*, defaults to `"augmented_model.onnx"`):
                 The path used to save the augmented model used to collect the quantization ranges.
-            operators_to_quantize (`Optional[List[NodeType]]`, *optional*):
-                List of the operators types to quantize.
             batch_size (`int`, *optional*, defaults to 1):
                 The batch size to use when collecting the quantization ranges values.
             use_external_data_format (`bool`, defaults to `False`):
                 Whether to use external data format to store model which size is >= 2Gb.
-            use_gpu (`bool`, defaults to `False`):
-                Whether to use the GPU when collecting the quantization ranges values.
-            force_symmetric_range (`bool`, *optional*, defaults to `False`):
-                Whether to make the quantization ranges symmetric.
 
         Returns:
             The dictionary mapping the nodes name to their quantization ranges.
@@ -197,12 +191,8 @@ class FuriosaAIQuantizer(OptimumQuantizer):
         self.partial_fit(
             dataset,
             calibration_config,
-            onnx_augmented_model_name,
-            operators_to_quantize,
             batch_size,
             use_external_data_format,
-            use_gpu,
-            force_symmetric_range,
         )
         return self.compute_ranges()
 
@@ -210,12 +200,8 @@ class FuriosaAIQuantizer(OptimumQuantizer):
         self,
         dataset: Dataset,
         calibration_config: CalibrationConfig,
-        onnx_augmented_model_name: Union[str, Path] = "augmented_model.onnx",
-        operators_to_quantize: Optional[List[NodeType]] = None,
         batch_size: int = 1,
         use_external_data_format: bool = False,
-        use_gpu: bool = False,
-        force_symmetric_range: bool = False,
     ):
         """
         Performs the calibration step and collects the quantization ranges without computing them.
@@ -225,38 +211,32 @@ class FuriosaAIQuantizer(OptimumQuantizer):
                 The dataset to use when performing the calibration step.
             calibration_config (`CalibrationConfig`):
                 The configuration containing the parameters related to the calibration step.
-            onnx_augmented_model_name (`Union[str, Path]`, *optional*, defaults to `"augmented_model.onnx"`):
-                The path used to save the augmented model used to collect the quantization ranges.
-            operators_to_quantize (`Optional[List[NodeType]]`, *optional*):
-                List of the operators types to quantize.
             batch_size (`int`, *optional*, defaults to 1):
                 The batch size to use when collecting the quantization ranges values.
             use_external_data_format (`bool`, *optional*, defaults to `False`):
                 Whether uto se external data format to store model which size is >= 2Gb.
-            use_gpu (`bool`, *optional*, defaults to `False`):
-                Whether to use the GPU when collecting the quantization ranges values.
-            force_symmetric_range (`bool`, *optional*, defaults to `False`):
-                Whether to make the quantization ranges symmetric.
         """
         # If no calibrator, then create one
         if calibration_config.method is not None:
             LOGGER.info(f"Creating calibrator: {calibration_config.method}({calibration_config})")
+            self.onnx_model = onnx.load(Path(self.model_path).as_posix())
+
             self._calibrator = calibration_config.create_calibrator(
-                onnx_model_path=self.onnx_model_path.as_posix(),
+                model=self.onnx_model,
                 use_external_data_format=use_external_data_format,
-                augmented_model_name=onnx_augmented_model_name,
-                operators_to_quantize=operators_to_quantize,
-                force_symmetric_range=force_symmetric_range,
             )
 
-        if use_gpu:
-            self._calibrator.set_execution_providers(execution_providers=["CUDAExecutionProvider"])
-
         LOGGER.info("Collecting tensors statistics...")
-        reader = ORTCalibrationDataReader(dataset, batch_size)
+        reader = FuriosaAICalibrationDataReader(dataset, batch_size)
         self._calibrator.collect_data(reader)
 
-    def compute_ranges(self) -> Dict[NodeName, Tuple[float, float]]:
+        # self.collect_data(reader)
+
+    # def collect_data(self, reader: FuriosaAICalibrationDataReader):
+    #     for calibration_data, _ in tqdm.tqdm(calibration_dataloader):
+    #         self._calibrator.collect_data(calibration_data.numpy())
+
+    def compute_ranges(self) -> Dict[str, Tuple[float, float]]:
         """
         Computes the quantization ranges.
 
@@ -276,9 +256,8 @@ class FuriosaAIQuantizer(OptimumQuantizer):
         quantization_config: QuantizationConfig,
         save_dir: Union[str, Path],
         file_suffix: Optional[str] = "quantized",
-        calibration_tensors_range: Optional[Dict[NodeName, Tuple[float, float]]] = None,
+        calibration_tensors_range: Optional[Dict[str, Tuple[float, float]]] = None,
         use_external_data_format: bool = False,
-        preprocessor: Optional[QuantizationPreprocessor] = None,
     ) -> Path:
         """
         Quantizes a model given the optimization specifications defined in `quantization_config`.
@@ -295,126 +274,33 @@ class FuriosaAIQuantizer(OptimumQuantizer):
                 static quantization.
             use_external_data_format (`bool`, *optional*, defaults to `False`):
                 Whether to use external data format to store model which size is >= 2Gb.
-            preprocessor (`Optional[QuantizationPreprocessor]`, *optional*):
-                The preprocessor to use to collect the nodes to include or exclude from quantization.
 
         Returns:
             The path of the resulting quantized model.
         """
-        use_qdq = quantization_config.is_static and quantization_config.format == QuantFormat.QDQ
+
         save_dir = Path(save_dir)
         save_dir.mkdir(parents=True, exist_ok=True)
 
-        if not quantization_config.is_static:
-            if quantization_config.mode != QuantizationMode.IntegerOps:
-                LOGGER.warning(
-                    f"ONNX Runtime dynamic quantization mode should be QuantizationMode.IntegerOps "
-                    f"(got: {quantization_config.mode})."
-                )
-            if quantization_config.activations_dtype != QuantType.QUInt8:
-                LOGGER.warning(
-                    f"ONNX Runtime dynamic quantization activations data type should be QuantType.QUInt8 "
-                    f"(got: {quantization_config.activations_dtype})."
-                )
-
-        LOGGER.info(
-            f"Creating {'static' if quantization_config.is_static else 'dynamic'} quantizer: {quantization_config}"
-        )
-
-        if preprocessor is not None:
-            LOGGER.info("Preprocessor detected, collecting nodes to include/exclude")
-            nodes_to_quantize, nodes_to_exclude = preprocessor.collect(self.onnx_model_path)
-
-            nodes_to_quantize.update(quantization_config.nodes_to_quantize)
-            nodes_to_exclude.update(quantization_config.nodes_to_exclude)
-
-            quantization_config.nodes_to_quantize = list(nodes_to_quantize)
-            quantization_config.nodes_to_exclude = list(nodes_to_exclude)
-
-        has_subgraphs = False
-        onnx_model = onnx.load(Path(self.onnx_model_path).as_posix())
-        for node in onnx_model.graph.node:
-            if node.op_type in ["If", "Loop", "Scan", "SequenceMap"]:
-                has_subgraphs = True
-                break
-
-        if quantization_config.is_static and has_subgraphs:
-            raise NotImplementedError("Static quantization is currently not supported for models with" " subgraphs.")
-
-        quantizer_factory = QDQQuantizer if use_qdq else ONNXQuantizer
-
-        if parse(ort_version) >= Version("1.13.0"):
-            # The argument `input_qType` has been changed into `activation_qType` from ORT 1.13
-            quantizer = quantizer_factory(
-                model=onnx_model,
-                static=quantization_config.is_static,
-                per_channel=quantization_config.per_channel,
-                mode=quantization_config.mode,
-                weight_qType=quantization_config.weights_dtype,
-                activation_qType=quantization_config.activations_dtype,
-                tensors_range=calibration_tensors_range,
-                reduce_range=quantization_config.reduce_range,
-                nodes_to_quantize=quantization_config.nodes_to_quantize,
-                nodes_to_exclude=quantization_config.nodes_to_exclude,
-                op_types_to_quantize=[
-                    operator.value if isinstance(operator, ORTQuantizableOperator) else operator
-                    for operator in quantization_config.operators_to_quantize
-                ],
-                extra_options={
-                    "WeightSymmetric": quantization_config.weights_symmetric,
-                    "ActivationSymmetric": quantization_config.activations_symmetric,
-                    "EnableSubgraph": has_subgraphs,
-                    "ForceSymmetric": quantization_config.activations_symmetric
-                    and quantization_config.weights_symmetric,
-                    "AddQDQPairToWeight": quantization_config.qdq_add_pair_to_weight,
-                    "DedicatedQDQPair": quantization_config.qdq_dedicated_pair,
-                    "QDQOpTypePerChannelSupportToAxis": quantization_config.qdq_op_type_per_channel_support_to_axis,
-                },
-            )
-        else:
-            quantizer = quantizer_factory(
-                model=onnx_model,
-                static=quantization_config.is_static,
-                per_channel=quantization_config.per_channel,
-                mode=quantization_config.mode,
-                weight_qType=quantization_config.weights_dtype,
-                input_qType=quantization_config.activations_dtype,
-                tensors_range=calibration_tensors_range,
-                reduce_range=quantization_config.reduce_range,
-                nodes_to_quantize=quantization_config.nodes_to_quantize,
-                nodes_to_exclude=quantization_config.nodes_to_exclude,
-                op_types_to_quantize=[
-                    operator.value if isinstance(operator, ORTQuantizableOperator) else operator
-                    for operator in quantization_config.operators_to_quantize
-                ],
-                extra_options={
-                    "WeightSymmetric": quantization_config.weights_symmetric,
-                    "ActivationSymmetric": quantization_config.activations_symmetric,
-                    "EnableSubgraph": False,
-                    "ForceSymmetric": quantization_config.activations_symmetric
-                    and quantization_config.weights_symmetric,
-                    "AddQDQPairToWeight": quantization_config.qdq_add_pair_to_weight,
-                    "DedicatedQDQPair": quantization_config.qdq_dedicated_pair,
-                    "QDQOpTypePerChannelSupportToAxis": quantization_config.qdq_op_type_per_channel_support_to_axis,
-                },
-            )
+        if self.onnx_model is None:
+            self.onnx_model = onnx.load(Path(self.model_path).as_posix())
 
         LOGGER.info("Quantizing model...")
-        quantizer.quantize_model()
+        model_quantized = quantize(self.onnx_model, calibration_tensors_range)
 
         suffix = f"_{file_suffix}" if file_suffix else ""
-        quantized_model_path = save_dir.joinpath(f"{self.onnx_model_path.stem}{suffix}").with_suffix(".onnx")
+        quantized_model_path = save_dir.joinpath(f"{self.model_path.stem}{suffix}").with_suffix(".onnx")
         LOGGER.info(f"Saving quantized model at: {save_dir} (external data format: " f"{use_external_data_format})")
-        quantizer.model.save_model_to_file(quantized_model_path.as_posix(), use_external_data_format)
+        model_quantized.save_model_to_file(quantized_model_path.as_posix(), use_external_data_format)
 
         # Create and save the configuration summarizing all the parameters related to quantization
-        ort_config = ORTConfig(quantization=quantization_config, use_external_data_format=use_external_data_format)
-        ort_config.save_pretrained(save_dir)
+        furiosa_config = FuriosaAIConfig(
+            quantization=quantization_config, use_external_data_format=use_external_data_format
+        )
+        furiosa_config.save_pretrained(save_dir)
 
         if self.config is not None:
             self.config.save_pretrained(save_dir)
-
-        maybe_save_preprocessors(self.onnx_model_path.parent, save_dir)
 
         return Path(save_dir)
 
@@ -455,12 +341,6 @@ class FuriosaAIQuantizer(OptimumQuantizer):
             The calibration `datasets.Dataset` to use for the post-training static quantization calibration
             step.
         """
-        if dataset_name is None:
-            raise ValueError(
-                "ORTQuantizer: Static quantization calibration step requires a dataset_name if no calib_dataset is "
-                "provided."
-            )
-
         calib_dataset = load_dataset(
             dataset_name,
             name=dataset_config_name,
@@ -480,7 +360,7 @@ class FuriosaAIQuantizer(OptimumQuantizer):
         return self.clean_calibration_dataset(processed_calib_dataset)
 
     def clean_calibration_dataset(self, dataset: Dataset) -> Dataset:
-        model = onnx.load(self.onnx_model_path)
+        model = onnx.load(self.model_path)
         model_inputs = {input.name for input in model.graph.input}
         ignored_columns = list(set(dataset.column_names) - model_inputs)
         return dataset.remove_columns(ignored_columns)

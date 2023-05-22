@@ -12,8 +12,33 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-# from .configuration import FuriosaAIConfig
-# from .quantization import FuriosaAIQuantizer
-from .modeling import (
-    FuriosaAIModelForImageClassification,
-)
+from typing import TYPE_CHECKING
+
+from transformers.utils import OptionalDependencyNotAvailable, _LazyModule
+
+
+_import_structure = {
+    "configuration": [
+        "CalibrationConfig",
+        "AutoCalibrationConfig",
+        "QuantizationMode",
+        "FuriosaAIConfig",
+        "QuantizationConfig",
+    ],
+    "modeling": [
+        "FuriosaAIModelForImageClassification",
+    ],
+    "quantization": ["FuriosaAIQuantizer"],
+}
+
+# Direct imports for type-checking
+if TYPE_CHECKING:
+    from .configuration import FuriosaAIConfig, QuantizationConfig
+    from .modeling import (
+        FuriosaAIModelForImageClassification,
+    )
+    from .quantization import FuriosaAIQuantizer
+else:
+    import sys
+
+    sys.modules[__name__] = _LazyModule(__name__, globals()["__file__"], _import_structure, module_spec=__spec__)
