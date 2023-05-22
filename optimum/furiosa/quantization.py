@@ -20,10 +20,6 @@ from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Tuple, Union
 
 import onnx
 from datasets import Dataset, load_dataset
-from onnxruntime import __version__ as ort_version
-from onnxruntime.quantization import CalibrationDataReader, QuantFormat, QuantizationMode, QuantType
-from onnxruntime.quantization.onnx_quantizer import ONNXQuantizer
-from onnxruntime.quantization.qdq_quantizer import QDQQuantizer
 from packaging.version import Version, parse
 from transformers import AutoConfig
 
@@ -33,7 +29,8 @@ from . import ORTQuantizableOperator
 from .configuration import CalibrationConfig, NodeName, NodeType, ORTConfig, QuantizationConfig
 from .modeling import FuriosaAIModel
 from .preprocessors import QuantizationPreprocessor
-
+from furiosa.optimizer import optimize_model
+from furiosa.quantizer import quantize, Calibrator, CalibrationMethod
 
 if TYPE_CHECKING:
     from transformers import PretrainedConfig
