@@ -13,15 +13,17 @@
 #  limitations under the License.
 
 import logging
-from typing import Union
+from typing import Callable, Dict, List, Optional, Union
 
 import numpy as np
 import torch
 import transformers
+from datasets import Dataset
 from transformers import (
     AutoConfig,
     AutoModel,
     AutoModelForImageClassification,
+    EvalPrediction,
 )
 from transformers.file_utils import add_start_docstrings, add_start_docstrings_to_model_forward
 from transformers.modeling_outputs import (
@@ -65,12 +67,23 @@ class FuriosaAIModel(FuriosaAIBaseModel):
     base_model_prefix = "furiosa_model"
     auto_model_class = AutoModel
 
-    def __init__(self, model, config: transformers.PretrainedConfig = None, **kwargs):
+    def __init__(
+        self,
+        model,
+        config: transformers.PretrainedConfig = None,
+        compute_metrics: Optional[Callable[[EvalPrediction], Dict]] = None,
+        label_names: Optional[List[str]] = None,
+        **kwargs,
+    ):
         super().__init__(model, config, **kwargs)
         # Avoid warnings when creating a transformers pipeline
         AutoConfig.register(self.base_model_prefix, AutoConfig)
         self.auto_model_class.register(AutoConfig, self.__class__)
         self.device = torch.device("cpu")
+
+        # Evaluation args
+        self.compute_metrics = compute_metrics
+        self.label_names = ["labels"] if label_names is None else label_names
 
     def to(self, device: str):
         """
@@ -83,6 +96,44 @@ class FuriosaAIModel(FuriosaAIBaseModel):
 
     def forward(self, *args, **kwargs):
         raise NotImplementedError
+
+    def evaluation_loop(self, dataset: Dataset):
+        """
+        Run evaluation and returns metrics and predictions.
+
+        Args:
+            dataset (`datasets.Dataset`):
+                Dataset to use for the evaluation step.
+        """
+        logger.info("***** Running evaluation *****")
+
+        # from transformers import EvalPrediction
+        from transformers.trainer_pt_utils import nested_concat
+        from transformers.trainer_utils import EvalLoopOutput
+
+        all_preds = None
+        all_labels = None
+        for step, inputs in enumerate(dataset):
+            has_labels = all(inputs.get(k) is not None for k in self.label_names)
+            if has_labels:
+                labels = tuple(np.array([inputs.get(name)]) for name in self.label_names)
+                if len(labels) == 1:
+                    labels = labels[0]
+            else:
+                labels = None
+            inputs = [np.array([inputs[key]]) for key in self.input_names if key in inputs]
+
+            preds = self.sess.run(inputs)
+            if len(preds) == 1:
+                preds = preds[0].numpy()
+            all_preds = preds if all_preds is None else nested_concat(all_preds, preds, padding_index=-100)
+            all_labels = labels if all_labels is None else nested_concat(all_labels, labels, padding_index=-100)
+
+        if self.compute_metrics is not None and all_preds is not None and all_labels is not None:
+            metrics = self.compute_metrics(EvalPrediction(predictions=all_preds, label_ids=all_labels))
+        else:
+            metrics = {}
+        return EvalLoopOutput(predictions=all_preds, label_ids=all_labels, metrics=metrics, num_samples=len(dataset))
 
 
 IMAGE_CLASSIFICATION_EXAMPLE = r"""
@@ -112,6 +163,7 @@ class FuriosaAIModelForImageClassification(FuriosaAIModel):
 
     def __init__(self, model=None, config=None, **kwargs):
         super().__init__(model, config, **kwargs)
+        self.input_names = ["pixel_values"]
 
     @add_start_docstrings_to_model_forward(
         IMAGE_INPUTS_DOCSTRING.format("batch_size, num_channels, height, width")
