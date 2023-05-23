@@ -14,14 +14,16 @@
 
 import logging
 import os
-from collections import defaultdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Dict, Optional, Tuple, Union
 
+import numpy as np
 import onnx
+import tqdm
 from datasets import Dataset, load_dataset
 from transformers import AutoConfig
 
+from furiosa.optimizer import optimize_model
 from furiosa.quantizer import quantize
 
 from .configuration import CalibrationConfig, FuriosaAIConfig, QuantizationConfig
@@ -50,25 +52,30 @@ class FuriosaAICalibrationDataReader:
 
         self._dataset_iter = iter(self.dataset)
 
+    def __len__(self):
+        return len(self.dataset) // self.batch_size
+
     def __next__(self):
         featurized_samples = None
         try:
-            if self.batch_size == 1:
-                featurized_samples = {key: [value] for key, value in next(self._dataset_iter).items()}
-            else:
-                featurized_samples = defaultdict(list)
-                for _ in range(self.batch_size):
-                    sample = next(self._dataset_iter)
+            featurized_samples = []
+            for _ in range(self.batch_size):
+                sample = next(self._dataset_iter)
 
-                    for name, value in sample.items():
-                        featurized_samples[name] += [value]
+                input_list = [[] for i in range(len(sample))]
+                for i, name in enumerate(sample):
+                    input_list[i] += [sample[name]]
+                input_list = [np.array(d, np.float32) for d in input_list]
+
+                featurized_samples.append(input_list)
 
         except StopIteration:
-            pass
+            raise StopIteration
 
-        if featurized_samples is not None and len(featurized_samples) > 0:
+        if len(featurized_samples) > 0:
             return featurized_samples
-        return None
+
+        raise StopIteration
 
     def __iter__(self):
         return self
@@ -100,6 +107,7 @@ class FuriosaAIQuantizer(OptimumQuantizer):
                     "having to specify the configuration explicitly."
                 )
         self._calibrator = None
+        self._calibration_config = None
 
     @classmethod
     def from_pretrained(
@@ -135,10 +143,6 @@ class FuriosaAIQuantizer(OptimumQuantizer):
                 raise RuntimeError(
                     f"Found too many ONNX model files in {model_or_path}. {furiosa_quantizer_error_message}"
                 )
-            else:
-                raise ValueError(
-                    "Currently, quantization of only ONNX files is supported using the optimum-furiosa repository!"
-                )
             file_name = onnx_files[0].name
 
         if isinstance(model_or_path, FuriosaAIModel):
@@ -159,9 +163,7 @@ class FuriosaAIQuantizer(OptimumQuantizer):
         self,
         dataset: Dataset,
         calibration_config: CalibrationConfig,
-        onnx_augmented_model_name: Union[str, Path] = "augmented_model.onnx",
         batch_size: int = 1,
-        use_external_data_format: bool = False,
     ) -> Dict[str, Tuple[float, float]]:
         """
         Performs the calibration step and computes the quantization ranges.
@@ -171,12 +173,8 @@ class FuriosaAIQuantizer(OptimumQuantizer):
                 The dataset to use when performing the calibration step.
             calibration_config ([`~CalibrationConfig`]):
                 The configuration containing the parameters related to the calibration step.
-            onnx_augmented_model_name (`Union[str, Path]`, *optional*, defaults to `"augmented_model.onnx"`):
-                The path used to save the augmented model used to collect the quantization ranges.
             batch_size (`int`, *optional*, defaults to 1):
                 The batch size to use when collecting the quantization ranges values.
-            use_external_data_format (`bool`, defaults to `False`):
-                Whether to use external data format to store model which size is >= 2Gb.
 
         Returns:
             The dictionary mapping the nodes name to their quantization ranges.
@@ -192,17 +190,14 @@ class FuriosaAIQuantizer(OptimumQuantizer):
             dataset,
             calibration_config,
             batch_size,
-            use_external_data_format,
         )
         return self.compute_ranges()
 
-    def partial_fit(
-        self,
-        dataset: Dataset,
-        calibration_config: CalibrationConfig,
-        batch_size: int = 1,
-        use_external_data_format: bool = False,
-    ):
+    def _load_model_and_optimize(self):
+        model = onnx.load(Path(self.model_path).as_posix())
+        self.onnx_model = optimize_model(model)
+
+    def partial_fit(self, dataset: Dataset, calibration_config: CalibrationConfig, batch_size: int = 1):
         """
         Performs the calibration step and collects the quantization ranges without computing them.
 
@@ -213,28 +208,22 @@ class FuriosaAIQuantizer(OptimumQuantizer):
                 The configuration containing the parameters related to the calibration step.
             batch_size (`int`, *optional*, defaults to 1):
                 The batch size to use when collecting the quantization ranges values.
-            use_external_data_format (`bool`, *optional*, defaults to `False`):
-                Whether uto se external data format to store model which size is >= 2Gb.
         """
+        self._calibration_config = calibration_config
+
         # If no calibrator, then create one
         if calibration_config.method is not None:
             LOGGER.info(f"Creating calibrator: {calibration_config.method}({calibration_config})")
-            self.onnx_model = onnx.load(Path(self.model_path).as_posix())
+            self._load_model_and_optimize()
 
             self._calibrator = calibration_config.create_calibrator(
                 model=self.onnx_model,
-                use_external_data_format=use_external_data_format,
             )
 
         LOGGER.info("Collecting tensors statistics...")
         reader = FuriosaAICalibrationDataReader(dataset, batch_size)
-        self._calibrator.collect_data(reader)
-
-        # self.collect_data(reader)
-
-    # def collect_data(self, reader: FuriosaAICalibrationDataReader):
-    #     for calibration_data, _ in tqdm.tqdm(calibration_dataloader):
-    #         self._calibrator.collect_data(calibration_data.numpy())
+        for data in tqdm.tqdm(reader):
+            self._calibrator.collect_data(data)
 
     def compute_ranges(self) -> Dict[str, Tuple[float, float]]:
         """
@@ -257,7 +246,6 @@ class FuriosaAIQuantizer(OptimumQuantizer):
         save_dir: Union[str, Path],
         file_suffix: Optional[str] = "quantized",
         calibration_tensors_range: Optional[Dict[str, Tuple[float, float]]] = None,
-        use_external_data_format: bool = False,
     ) -> Path:
         """
         Quantizes a model given the optimization specifications defined in `quantization_config`.
@@ -272,8 +260,6 @@ class FuriosaAIQuantizer(OptimumQuantizer):
             calibration_tensors_range (`Optional[Dict[NodeName, Tuple[float, float]]]`, *optional*):
                 The dictionary mapping the nodes name to their quantization ranges, used and required only when applying
                 static quantization.
-            use_external_data_format (`bool`, *optional*, defaults to `False`):
-                Whether to use external data format to store model which size is >= 2Gb.
 
         Returns:
             The path of the resulting quantized model.
@@ -283,20 +269,19 @@ class FuriosaAIQuantizer(OptimumQuantizer):
         save_dir.mkdir(parents=True, exist_ok=True)
 
         if self.onnx_model is None:
-            self.onnx_model = onnx.load(Path(self.model_path).as_posix())
+            self._load_model_and_optimize()
 
         LOGGER.info("Quantizing model...")
         model_quantized = quantize(self.onnx_model, calibration_tensors_range)
 
         suffix = f"_{file_suffix}" if file_suffix else ""
-        quantized_model_path = save_dir.joinpath(f"{self.model_path.stem}{suffix}").with_suffix(".onnx")
-        LOGGER.info(f"Saving quantized model at: {save_dir} (external data format: " f"{use_external_data_format})")
-        model_quantized.save_model_to_file(quantized_model_path.as_posix(), use_external_data_format)
+        quantized_model_path = save_dir.joinpath(f"{self.model_path.stem}{suffix}").with_suffix(".dfg")
+        LOGGER.info(f"Saving quantized model at: {save_dir}")
+        with open(quantized_model_path.as_posix(), "wb") as f:
+            f.write(bytes(model_quantized))
 
         # Create and save the configuration summarizing all the parameters related to quantization
-        furiosa_config = FuriosaAIConfig(
-            quantization=quantization_config, use_external_data_format=use_external_data_format
-        )
+        furiosa_config = FuriosaAIConfig(quantization=quantization_config, calibration=self._calibration_config)
         furiosa_config.save_pretrained(save_dir)
 
         if self.config is not None:

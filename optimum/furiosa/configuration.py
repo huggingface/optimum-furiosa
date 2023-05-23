@@ -55,16 +55,12 @@ class CalibrationConfig:
         self,
         model: Union[onnx.ModelProto, bytes],
     ) -> Calibrator:
-        kwargs = {
-            "model": model,
-            "calibrate_method": self.method,
-        }
-        return Calibrator(**kwargs)
+        return Calibrator(model, self.method)
 
 
 class AutoCalibrationConfig:
     @staticmethod
-    def minmax(dataset: Dataset, moving_average: bool = False) -> CalibrationConfig:
+    def minmax(dataset: Dataset) -> CalibrationConfig:
         """
         Args:
             dataset (`Dataset`):
@@ -86,20 +82,9 @@ class AutoCalibrationConfig:
 class QuantizationConfig:
     """
     QuantizationConfig is the configuration class handling all the ONNX Runtime quantization parameters.
-
-    Args:
-        activations_symmetric (`bool`, defaults to `False`):
-            Whether to apply symmetric quantization on the activations.
-        weights_symmetric (`bool`, defaults to `True`):
-            Whether to apply symmetric quantization on the weights.
     """
 
-    activations_symmetric: bool = False
-    weights_symmetric: bool = True
-
-    @property
-    def use_symmetric_calibration(self) -> bool:
-        return self.activations_symmetric and self.weights_symmetric
+    pass
 
 
 class FuriosaAIConfig(BaseConfig):
@@ -109,14 +94,13 @@ class FuriosaAIConfig(BaseConfig):
     def __init__(
         self,
         opset: Optional[int] = None,
-        use_external_data_format: bool = False,
-        one_external_file: bool = True,
         quantization: Optional[QuantizationConfig] = None,
+        calibration: Optional[CalibrationConfig] = None,
         **kwargs,
     ):
         super().__init__()
-        self.opset = opset
         self.quantization = self.dataclass_to_dict(quantization)
+        self.calibration = self.dataclass_to_dict(calibration)
         self.optimum_version = kwargs.pop("optimum_version", None)
 
     @staticmethod
