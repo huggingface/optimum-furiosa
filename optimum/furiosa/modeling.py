@@ -17,6 +17,7 @@ from typing import Callable, Dict, List, Optional, Union
 
 import numpy as np
 import torch
+import tqdm
 import transformers
 from datasets import Dataset
 from transformers import (
@@ -113,7 +114,7 @@ class FuriosaAIModel(FuriosaAIBaseModel):
 
         all_preds = None
         all_labels = None
-        for step, inputs in enumerate(dataset):
+        for step, inputs in tqdm.tqdm(enumerate(dataset), total=len(dataset)):
             has_labels = all(inputs.get(k) is not None for k in self.label_names)
             if has_labels:
                 labels = tuple(np.array([inputs.get(name)]) for name in self.label_names)
@@ -121,7 +122,7 @@ class FuriosaAIModel(FuriosaAIBaseModel):
                     labels = labels[0]
             else:
                 labels = None
-            inputs = [np.array([inputs[key]]) for key in self.input_names if key in inputs]
+            inputs = [np.array([inputs[key]], dtype=np.float32) for key in self.input_names if key in inputs]
 
             preds = self.sess.run(inputs)
             if len(preds) == 1:
