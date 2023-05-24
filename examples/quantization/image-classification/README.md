@@ -16,9 +16,9 @@ limitations under the License.
 
 # Image classification
 
-The script [`run_image_classification.py`](https://github.com/huggingface/optimum-furiosa/blob/main/examples/quantization/image_classification/run_image_classification.py) allows us to apply different quantization using [FuriosaAI SDK](ss) for image classification tasks.
+The script [`run_image_classification.py`](https://github.com/huggingface/optimum-furiosa/blob/main/examples/quantization/image_classification/run_image_classification.py) allows us to apply different quantization using [FuriosaAI SDK](https://furiosa-ai.github.io/docs/latest/en/software/quantization.html) for image classification tasks.
 
-The following example applies static quantization on a Resnet model fine-tuned on the beans classification dataset.
+The following example applies quantization on a Resnet model fine-tuned on the beans classification dataset.
 
 ```bash
 python run_image_classification.py \

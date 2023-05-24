@@ -1,5 +1,5 @@
 # optimum-furiosa
-Accelerated inference of 🤗 models using FuriosaAI NPU chips. 
+Accelerated inference of 🤗 models using FuriosaAI NPU chips.
 
 ## Furiosa SDK setup
 A Furiosa SDK environment needs to be enabled to use this library. Please refer to Furiosa's [Installation](https://furiosa-ai.github.io/docs/v0.5.0/en/installation/prerequisites.html#) guide.
