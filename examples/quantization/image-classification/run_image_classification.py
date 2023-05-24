@@ -35,53 +35,15 @@ from torchvision.transforms import CenterCrop, Compose, Normalize, Resize, ToTen
 from transformers import AutoConfig, AutoFeatureExtractor, EvalPrediction, HfArgumentParser, TrainingArguments
 from transformers.utils.versions import require_version
 
-from optimum.exporters import TasksManager
-from optimum.exporters.onnx import export
-
 # from optimum.onnxruntime.model import ORTModel
 from optimum.furiosa import FuriosaAIModelForImageClassification, FuriosaAIQuantizer
 from optimum.furiosa.configuration import AutoCalibrationConfig, QuantizationConfig
+from optimum.furiosa.utils import export_model_to_onnx
 
 
 logger = logging.getLogger(__name__)
 
 require_version("datasets>=2.0.0", "To fix: pip install -r examples/pytorch/image-classification/requirements.txt")
-
-
-def export_model(model_id, save_dir, input_shape_dict, output_shape_dict):
-    task = "image-classification"
-    model = TasksManager.get_model_from_task(task, model_id)
-
-    model_type = model.config.model_type.replace("_", "-")
-    onnx_config_class = TasksManager.get_exporter_config_constructor(
-        exporter="onnx",
-        model=model,
-        task=task,
-        model_name=model_id,
-        model_type=model_type,
-    )
-
-    onnx_config = onnx_config_class(model.config)
-    save_dir_path = Path(save_dir) / "model_temp.onnx"
-
-    # Export the model to the ONNX format
-    export(
-        model=model,
-        config=onnx_config,
-        opset=onnx_config.DEFAULT_ONNX_OPSET,
-        output=save_dir_path,
-    )
-
-    import onnx
-    from onnx import shape_inference
-    from onnx.tools import update_model_dims
-
-    model = onnx.load(save_dir_path)
-    updated_model = update_model_dims.update_inputs_outputs_dims(model, input_shape_dict, output_shape_dict)
-    inferred_model = shape_inference.infer_shapes(updated_model)
-
-    static_model_path = Path(save_dir_path).parent / "model.onnx"
-    onnx.save(inferred_model, static_model_path)
 
 
 @dataclass
@@ -302,7 +264,7 @@ def main():
         return result
 
     # Export the model
-    export_model(
+    export_model_to_onnx(
         model_args.model_name_or_path,
         save_dir=training_args.output_dir,
         input_shape_dict={"pixel_values": [model_args.batch_size, 3, image_size, image_size]},
