@@ -35,7 +35,6 @@ from torchvision.transforms import CenterCrop, Compose, Normalize, Resize, ToTen
 from transformers import AutoConfig, AutoFeatureExtractor, EvalPrediction, HfArgumentParser, TrainingArguments
 from transformers.utils.versions import require_version
 
-# from optimum.onnxruntime.model import ORTModel
 from optimum.furiosa import FuriosaAIModelForImageClassification, FuriosaAIQuantizer
 from optimum.furiosa.configuration import AutoCalibrationConfig, QuantizationConfig
 from optimum.furiosa.utils import export_model_to_onnx
@@ -124,7 +123,7 @@ class OptimizationArguments:
         metadata={"help": "The quantization approach. Supported approach are static and dynamic."},
     )
     calibration_method: str = field(
-        default="minmax",
+        default="minmax_asym",
         metadata={
             "help": "The method chosen to calculate the activation quantization parameters using the calibration "
             "dataset. Current supported calibration methods are minmax, entropy and percentile."
@@ -151,25 +150,9 @@ class OptimizationArguments:
     )
 
 
-@dataclass
-class OnnxExportArguments:
-    """
-    Arguments to decide how the ModelProto will be saved.
-    """
-
-    # TODO: currently onnxruntime put external data in different path than the model proto, which will cause problem on re-loading it.
-    # https://github.com/microsoft/onnxruntime/issues/12576
-    use_external_data_format: bool = field(
-        default=False,
-        metadata={"help": "Whether to use external data format to store model whose size is >= 2Gb."},
-    )
-
-
 def main():
     # We now keep distinct sets of args, for a cleaner separation of concerns.
-    parser = HfArgumentParser(
-        (ModelArguments, DataTrainingArguments, TrainingArguments, OptimizationArguments, OnnxExportArguments)
-    )
+    parser = HfArgumentParser((ModelArguments, DataTrainingArguments, TrainingArguments, OptimizationArguments))
     if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
         # If we pass only one argument to the script and it's the path to a json file,
         # let's parse it to get our arguments.
@@ -177,7 +160,7 @@ def main():
             json_file=os.path.abspath(sys.argv[1])
         )
     else:
-        model_args, data_args, training_args, optim_args, onnx_export_args = parser.parse_args_into_dataclasses()
+        model_args, data_args, training_args, optim_args = parser.parse_args_into_dataclasses()
 
     # Setup logging
     logging.basicConfig(
@@ -297,13 +280,13 @@ def main():
     calibration_dataset = quantizer.clean_calibration_dataset(calibration_dataset)
 
     # Create the calibration configuration given the selected calibration method
-    if optim_args.calibration_method == "percentile":
-        calibration_config = AutoCalibrationConfig.percentiles(
+    if optim_args.calibration_method == "percentile_asym":
+        calibration_config = AutoCalibrationConfig.percentiles_asym(
             calibration_dataset,
             percentile=optim_args.calibration_histogram_percentile,
         )
     else:
-        calibration_config = AutoCalibrationConfig.minmax(calibration_dataset)
+        calibration_config = AutoCalibrationConfig.minmax_asym(calibration_dataset)
 
     if not 1 <= optim_args.num_calibration_shards <= len(calibration_dataset):
         raise ValueError(

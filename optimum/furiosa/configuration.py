@@ -43,6 +43,9 @@ class CalibrationConfig:
             The number of samples composing the calibration dataset.
         method (`CalibrationMethod`):
             The method chosen to calculate the activations quantization parameters using the calibration dataset.
+        percentage (`Optional[float]`, defaults to `None`):
+            The percentage to use when computing the activations quantization ranges when performing the calibration
+            step using the Percentile method.
     """
 
     dataset_name: str
@@ -50,17 +53,29 @@ class CalibrationConfig:
     dataset_split: str
     dataset_num_samples: int
     method: CalibrationMethod
+    percentage: Optional[float] = None
 
     def create_calibrator(
         self,
         model: Union[onnx.ModelProto, bytes],
     ) -> Calibrator:
-        return Calibrator(model, self.method)
+        return Calibrator(model, self.method, percentage=self.percentage)
 
 
 class AutoCalibrationConfig:
     @staticmethod
-    def minmax(dataset: Dataset) -> CalibrationConfig:
+    def create_calibration_config(dataset: Dataset, method: CalibrationMethod, percentile: float = None):
+        return CalibrationConfig(
+            dataset_name=dataset.info.builder_name,
+            dataset_config_name=dataset.info.config_name,
+            dataset_split=str(dataset.split),
+            dataset_num_samples=dataset.num_rows,
+            method=method,
+            percentage=percentile,
+        )
+
+    @staticmethod
+    def minmax_asym(dataset: Dataset) -> CalibrationConfig:
         """
         Args:
             dataset (`Dataset`):
@@ -69,12 +84,153 @@ class AutoCalibrationConfig:
         Returns:
             The calibration configuration.
         """
-        return CalibrationConfig(
-            dataset_name=dataset.info.builder_name,
-            dataset_config_name=dataset.info.config_name,
-            dataset_split=str(dataset.split),
-            dataset_num_samples=dataset.num_rows,
+        return AutoCalibrationConfig.create_calibration_config(
+            dataset,
             method=CalibrationMethod.MIN_MAX_ASYM,
+        )
+
+    def minmax_sym(dataset: Dataset) -> CalibrationConfig:
+        """
+        Args:
+            dataset (`Dataset`):
+                The dataset to use when performing the calibration step.
+
+        Returns:
+            The calibration configuration.
+        """
+        return AutoCalibrationConfig.create_calibration_config(
+            dataset,
+            method=CalibrationMethod.MIN_MAX_SYM,
+        )
+
+    @staticmethod
+    def entropy_asym(
+        dataset: Dataset,
+    ) -> CalibrationConfig:
+        """
+        Args:
+            dataset (`Dataset`):
+                The dataset to use when performing the calibration step.
+
+        Returns:
+            The calibration configuration.
+        """
+        return AutoCalibrationConfig.create_calibration_config(
+            dataset,
+            method=CalibrationMethod.ENTROPY_ASYM,
+        )
+
+    @staticmethod
+    def entropy_sym(
+        dataset: Dataset,
+    ) -> CalibrationConfig:
+        """
+        Args:
+            dataset (`Dataset`):
+                The dataset to use when performing the calibration step.
+
+        Returns:
+            The calibration configuration.
+        """
+        return AutoCalibrationConfig.create_calibration_config(
+            dataset,
+            method=CalibrationMethod.ENTROPY_SYM,
+        )
+
+    @staticmethod
+    def percentiles_asym(dataset: Dataset, percentile: float = 99.999) -> CalibrationConfig:
+        """
+        Args:
+            dataset (`Dataset`):
+                The dataset to use when performing the calibration step.
+            percentile (`float`):
+                The percentile to use when computing the activations quantization ranges.
+
+        Returns:
+            The calibration configuration.
+        """
+        return AutoCalibrationConfig.create_calibration_config(
+            dataset,
+            method=CalibrationMethod.PERCENTILE_ASYM,
+            percentile=percentile,
+        )
+
+    @staticmethod
+    def percentiles_sym(dataset: Dataset, percentile: float = 99.999) -> CalibrationConfig:
+        """
+        Args:
+            dataset (`Dataset`):
+                The dataset to use when performing the calibration step.
+            percentile (`float`):
+                The percentile to use when computing the activations quantization ranges.
+
+        Returns:
+            The calibration configuration.
+        """
+        return AutoCalibrationConfig.create_calibration_config(
+            dataset,
+            method=CalibrationMethod.PERCENTILE_SYM,
+            percentile=percentile,
+        )
+
+    @staticmethod
+    def mse_asym(dataset: Dataset) -> CalibrationConfig:
+        """
+        Args:
+            dataset (`Dataset`):
+                The dataset to use when performing the calibration step.
+
+        Returns:
+            The calibration configuration.
+        """
+        return AutoCalibrationConfig.create_calibration_config(
+            dataset,
+            method=CalibrationMethod.MSE_ASYM,
+        )
+
+    @staticmethod
+    def mse_sym(dataset: Dataset) -> CalibrationConfig:
+        """
+        Args:
+            dataset (`Dataset`):
+                The dataset to use when performing the calibration step.
+
+        Returns:
+            The calibration configuration.
+        """
+        return AutoCalibrationConfig.create_calibration_config(
+            dataset,
+            method=CalibrationMethod.MSE_SYM,
+        )
+
+    @staticmethod
+    def sqnr_asym(dataset: Dataset) -> CalibrationConfig:
+        """
+        Args:
+            dataset (`Dataset`):
+                The dataset to use when performing the calibration step.
+
+        Returns:
+            The calibration configuration.
+        """
+        return AutoCalibrationConfig.create_calibration_config(
+            dataset,
+            method=CalibrationMethod.SQNR_ASYM,
+        )
+
+    @staticmethod
+    def sqnr_sym(dataset: Dataset) -> CalibrationConfig:
+        """
+        Args:
+            dataset (`Dataset`):
+                The dataset to use when performing the calibration step.
+
+        Returns:
+            The calibration configuration.
+        """
+        return AutoCalibrationConfig.create_calibration_config(
+            dataset,
+            method=CalibrationMethod.SQNR_SYM,
         )
 
 
