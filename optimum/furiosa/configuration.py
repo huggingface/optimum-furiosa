@@ -29,7 +29,7 @@ DEFAULT_QUANTIZATION_CONFIG = {}
 @dataclass
 class CalibrationConfig:
     """
-    CalibrationConfig is the configuration class handling all the ONNX Runtime parameters related to the calibration
+    CalibrationConfig is the configuration class handling all the FurioaAI parameters related to the calibration
     step of static quantization.
 
     Args:
@@ -237,7 +237,7 @@ class AutoCalibrationConfig:
 @dataclass
 class QuantizationConfig:
     """
-    QuantizationConfig is the configuration class handling all the ONNX Runtime quantization parameters.
+    QuantizationConfig is the configuration class handling all the FuriosaAI quantization parameters.
     """
 
     pass

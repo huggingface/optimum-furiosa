@@ -83,7 +83,7 @@ class FuriosaAICalibrationDataReader:
 
 class FuriosaAIQuantizer(OptimumQuantizer):
     """
-    Handles the ONNX Runtime quantization process for models shared on huggingface.co/models.
+    Handles the FuriosaAI quantization process for models shared on huggingface.co/models.
     """
 
     def __init__(self, model_path: Path, config: Optional["PretrainedConfig"] = None):
@@ -116,7 +116,7 @@ class FuriosaAIQuantizer(OptimumQuantizer):
         file_name: Optional[str] = None,
     ) -> "FuriosaAIQuantizer":
         """
-        Instantiates a `FuriosaAIQuantizer` from a an ONNX model file or an `ORTModel`.
+        Instantiates a `FuriosaAIQuantizer` from a model path.
 
         Args:
             model_or_path (`Union[ORTModel, str, Path]`):
