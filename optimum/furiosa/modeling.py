@@ -124,11 +124,11 @@ class FuriosaAIModel(FuriosaAIBaseModel):
             else:
                 labels = None
 
-            inputs = []
-            for i, key in enumerate(self.input_names):
-                if key in inputs:
-                    inp = np.array([inputs[key]], dtype=FURIOSA_DTYPE_TO_NUMPY_DTYPE[self.input_to_dtype[i]])
-                    inputs.append(inp)
+            inputs = [
+                np.array([inputs[key]], dtype=FURIOSA_DTYPE_TO_NUMPY_DTYPE[self.inputs_to_dtype[k]])
+                for k, key in enumerate(self.input_names)
+                if key in inputs
+            ]
 
             preds = self.sess.run(inputs)
             if len(preds) == 1:

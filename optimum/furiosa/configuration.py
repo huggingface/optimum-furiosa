@@ -14,7 +14,7 @@
 
 from dataclasses import asdict, dataclass
 from enum import Enum
-from typing import Optional, Union
+from typing import Optional, Sequence, Union
 
 import onnx
 from datasets import Dataset
@@ -238,9 +238,18 @@ class AutoCalibrationConfig:
 class QuantizationConfig:
     """
     QuantizationConfig is the configuration class handling all the FuriosaAI quantization parameters.
+
+     Args:
+        with_quantize  (`bool`, defaults to `True`):
+            WWhether to put a Quantize operator at the beginning of the resulting model.
+        normalized_pixel_outputs (` Sequence[int`, defaults to `None`)::
+            A sequence of indices of output tensors in the ONNX model that produce pixel values in a normalized format
+            ranging from 0.0 to 1.0. If specified, the corresponding output tensors in the resulting quantized model
+            will generate pixel values in an unnormalized format from 0 to 255, represented as unsigned 8-bit integers (uint8).
     """
 
-    pass
+    with_quantize: bool = True
+    normalized_pixel_outputs: Sequence[int] = None
 
 
 class FuriosaAIConfig(BaseConfig):

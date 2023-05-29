@@ -290,7 +290,12 @@ class FuriosaAIQuantizer(OptimumQuantizer):
             self._load_model_and_optimize()
 
         LOGGER.info("Quantizing model...")
-        model_quantized = quantize(self.onnx_model, calibration_tensors_range)
+        model_quantized = quantize(
+            self.onnx_model,
+            calibration_tensors_range,
+            with_quantize=quantization_config.with_quantize,
+            normalized_pixel_outputs=quantization_config.normalized_pixel_outputs,
+        )
 
         suffix = f"_{file_suffix}" if file_suffix else ""
         quantized_model_path = save_dir.joinpath(f"{self.model_path.stem}{suffix}").with_suffix(".dfg")
