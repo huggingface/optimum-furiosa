@@ -32,6 +32,7 @@ from transformers.modeling_outputs import (
 )
 
 from .modeling_base import FuriosaAIBaseModel
+from .utils import FURIOSA_DTYPE_TO_NUMPY_DTYPE
 
 
 logger = logging.getLogger(__name__)
@@ -122,7 +123,12 @@ class FuriosaAIModel(FuriosaAIBaseModel):
                     labels = labels[0]
             else:
                 labels = None
-            inputs = [np.array([inputs[key]], dtype=np.float32) for key in self.input_names if key in inputs]
+
+            inputs = []
+            for i, key in enumerate(self.input_names):
+                if key in inputs:
+                    inp = np.array([inputs[key]], dtype=FURIOSA_DTYPE_TO_NUMPY_DTYPE[self.input_to_dtype[i]])
+                    inputs.append(inp)
 
             preds = self.sess.run(inputs)
             if len(preds) == 1:

@@ -38,16 +38,20 @@ LOGGER = logging.getLogger(__name__)
 
 
 class FuriosaAICalibrationDataReader:
-    __slots__ = ["batch_size", "dataset", "_dataset_iter"]
+    __slots__ = ["batch_size", "dataset", "_dataset_iter", "input_datatypes"]
 
-    def __init__(self, dataset: Dataset, batch_size: int = 1):
+    def __init__(self, dataset: Dataset, input_datatypes, batch_size: int = 1):
         if dataset is None:
             raise ValueError("Provided dataset is None.")
+
+        if input_datatypes is None:
+            raise ValueError("Provided input_datatypes is None.")
 
         if batch_size <= 0:
             raise ValueError(f"Provided batch_size should be >= 1 (got: {batch_size}).")
 
         self.dataset = dataset
+        self.input_datatypes = input_datatypes
         self.batch_size = batch_size
 
         self._dataset_iter = iter(self.dataset)
@@ -65,7 +69,10 @@ class FuriosaAICalibrationDataReader:
                 input_list = [[] for i in range(len(sample))]
                 for i, name in enumerate(sample):
                     input_list[i] += [sample[name]]
-                input_list = [np.array(d, np.float32) for d in input_list]
+                input_list = [
+                    np.array(d, onnx.mapping.TENSOR_TYPE_TO_NP_TYPE[self.input_datatypes[i]])
+                    for i, d in enumerate(input_list)
+                ]
 
                 featurized_samples.append(input_list)
 
@@ -220,8 +227,19 @@ class FuriosaAIQuantizer(OptimumQuantizer):
                 model=self.onnx_model,
             )
 
+        def get_input_datatypes(model):
+            input_datatypes = []
+
+            for input in model.graph.input:
+                input_type = input.type.tensor_type.elem_type
+                input_datatypes.extend([input_type])
+
+            return input_datatypes
+
+        input_datatypes = get_input_datatypes(self.onnx_model)
+
         LOGGER.info("Collecting tensors statistics...")
-        reader = FuriosaAICalibrationDataReader(dataset, batch_size)
+        reader = FuriosaAICalibrationDataReader(dataset, input_datatypes, batch_size)
         for data in tqdm.tqdm(reader):
             self._calibrator.collect_data(data)
 

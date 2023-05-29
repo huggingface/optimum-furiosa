@@ -15,6 +15,9 @@
 
 from pathlib import Path
 
+import numpy as np
+
+from furiosa.runtime.tensor import DataType
 from optimum.exporters import TasksManager
 from optimum.exporters.onnx import export
 
@@ -29,6 +32,12 @@ MAX_ONNX_OPSET = 13
 MIN_ONNX_QDQ_OPSET = 13
 
 WARBOY_DEVICE = "warboy"
+
+FURIOSA_DTYPE_TO_NUMPY_DTYPE = {
+    DataType.UINT8: np.uint8,
+    DataType.INT8: np.int8,
+    DataType.FLOAT32: np.float32,
+}
 
 _HEAD_TO_AUTOMODELS = {
     "image-classification": "FuriosaAIModelForImageClassification",
