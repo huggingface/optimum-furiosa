@@ -26,6 +26,7 @@ from transformers.file_utils import add_start_docstrings
 
 # Import Furiosa SDK
 import furiosa
+from furiosa import optimizer
 from furiosa.runtime import session
 from optimum.exporters import TasksManager
 from optimum.exporters.onnx import export
@@ -286,6 +287,7 @@ class FuriosaAIBaseModel(OptimizedModel):
             inferred_model = shape_inference.infer_shapes(updated_model)
 
             static_model_path = Path(model_path).parent / ONNX_WEIGHTS_NAME_STATIC
+            inferred_model = optimizer.frontend.onnx.optimize_model(inferred_model)
             onnx.save(inferred_model, static_model_path)
             self.model = static_model_path
 
