@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+# coding=utf-8
 #  Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
@@ -11,21 +13,3 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-
-[tool.black]
-line-length = 119
-target-version = ['py37']
-
-[tool.ruff]
-# Never enforce `E501` (line length violations).
-ignore = ["C901", "E501", "E741", "W605"]
-select = ["C", "E", "F", "I", "W"]
-line-length = 119
-
-# Ignore import violations in all `__init__.py` files.
-[tool.ruff.per-file-ignores]
-"__init__.py" = ["E402", "F401", "F403", "F811"]
-
-[tool.ruff.isort]
-lines-after-imports = 2
-known-first-party = ["optimum"]

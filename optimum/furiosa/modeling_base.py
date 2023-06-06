@@ -1,4 +1,4 @@
-#  Copyright 2022 The HuggingFace Team. All rights reserved.
+#  Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -255,6 +255,12 @@ class FuriosaAIBaseModel(OptimizedModel):
 
             logger.info("Compiling the model and creating the session ...")
             self.sess = session.create(self.model)
+
+            self.input_num = self.sess.input_num
+
+            self.inputs_to_dtype = []
+            for i in range(self.input_num):
+                self.inputs_to_dtype.append(self.sess.input(i).dtype)
 
     def _reshape(
         self,
