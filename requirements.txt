@@ -1,0 +1,4 @@
+fuirosa-sdk
+furiosa-optimizer
+onnx
+parametrized
