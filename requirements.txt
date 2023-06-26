@@ -2,4 +2,3 @@ furiosa-optimizer
 furiosa-sdk
 onnx
 parametrized
-pytest
