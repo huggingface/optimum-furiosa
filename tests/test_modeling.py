@@ -91,9 +91,7 @@ class FuriosaAIModelForImageClassificationIntegrationTest(unittest.TestCase):
         model = FuriosaAIModelForImageClassification.from_pretrained(
             model_id, export=True, input_shape_dict=input_shape_dict, output_shape_dict=output_shape_dict
         )
-
         preprocessor = AutoFeatureExtractor.from_pretrained(model_id)
-
         pipe = pipeline("image-classification", model=model, feature_extractor=preprocessor)
         outputs = pipe("http://images.cocodataset.org/val2017/000000039769.jpg")
         self.assertGreaterEqual(outputs[0]["score"], 0.0)
