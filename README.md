@@ -1,3 +1,6 @@
+[![Test](https://github.com/huggingface/optimum-furiosa/actions/workflows/test.yml/badge.svg)](https://github.com/huggingface/optimum-furiosa/actions/workflows/test.yml)
+
+
 # optimum-furiosa
 Accelerated inference of 🤗 models using FuriosaAI NPU chips.
 
