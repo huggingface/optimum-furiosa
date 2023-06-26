@@ -1,4 +1,4 @@
-fuirosa-sdk
+furiosa-sdk
 furiosa-optimizer
 onnx
 parametrized
