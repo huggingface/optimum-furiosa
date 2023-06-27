@@ -48,6 +48,7 @@ jobs:
           pip install .
           pip install black
           cd ..
+          cd optimum-furiosa
           pip install .
           cd ..
 
