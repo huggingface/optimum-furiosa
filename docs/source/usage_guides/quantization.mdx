@@ -1,0 +1,84 @@
+<!--Copyright 2022 The HuggingFace Team. All rights reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
+the License. You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
+an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
+specific language governing permissions and limitations under the License.
+-->
+
+# Quantization
+
+🤗 Optimum provides an `optimum.furiosa` package that enables you to apply quantization on many models hosted on
+the Hugging Face Hub using the [Furiosa](https://furiosa-ai.github.io/docs/latest/en/software/quantization.html)
+quantization tool.
+
+The quantization process is abstracted via the [`~optimum.furiosa.FuriosaAIConfig`] and
+the [`~optimum.furiosa.FuriosaAIQuantizer`] classes. The former allows you to specify how quantization should be done,
+while the latter effectively handles quantization.
+
+## Static Quantization example
+
+The [`~optimum.furiosa.FuriosaAIQuantizer`] class can be used to quantize statically your ONNX model. Below you will find
+an easy end-to-end example on how to quantize statically
+[eugenecamus/resnet-50-base-beans-demo](https://huggingface.co/eugenecamus/resnet-50-base-beans-demo).
+
+```python
+>>> from functools import partial
+>>> from transformers import AutoTokenizer
+>>> from optimum.furiosa import FuriosaAIQuantizer, FuriosaAIModelForImageClassification
+>>> from optimum.furiosa.configuration import AutoQuantizationConfig, AutoCalibrationConfig
+>>> from optimum.furiosa.utils import export_model_to_onnx
+
+>>> model_id = "eugenecamus/resnet-50-base-beans-demo"
+
+# Convert PyTorch model convert to ONNX and create Quantizer and setup config
+
+>>> feature_extractor = AutoFeatureExtractor.from_pretrained(model_id)
+
+>>> batch_size = 1
+>>> image_size = feature_extractor.size["shortest_edge"]
+>>> num_labels = 3
+>>> onnx_model_name = "model.onnx"
+>>> onnx_model_path = Path(output_dir) / onnx_model_name
+
+>>> export_model_to_onnx(
+...    model_id,
+...    save_dir=output_dir,
+...    input_shape_dict={"pixel_values": [batch_size, 3, image_size, image_size]},
+...    output_shape_dict={"logits": [batch_size, num_labels]},
+...    file_name=onnx_model_name,
+)
+>>> quantizer = FuriosaAIQuantizer.from_pretrained(output_dir, file_name=onnx_model_name)
+>>> qconfig = QuantizationConfig()
+
+# Create the calibration dataset
+>>> def preprocess_fn(ex, feature_extractor):
+...     return feature_extractor(ex["image"])
+
+>>> calibration_dataset = quantizer.get_calibration_dataset(
+...     "beans",
+...     preprocess_function=partial(preprocess_fn, feature_extractor=feature_extractor),
+...     num_samples=50,
+...     dataset_split="train",
+... )
+
+# Create the calibration configuration containing the parameters related to calibration.
+>>> calibration_config = AutoCalibrationConfig.mse_asym(calibration_dataset)
+
+# Perform the calibration step: computes the activations quantization ranges
+>>> ranges = quantizer.fit(
+...     dataset=calibration_dataset,
+...     calibration_config=calibration_config,
+... )
+
+# Apply static quantization on the model
+>>> model_quantized_path = quantizer.quantize(
+...     save_dir="path/to/output/model",
+...     calibration_tensors_range=ranges,
+...     quantization_config=qconfig,
+... )
+```

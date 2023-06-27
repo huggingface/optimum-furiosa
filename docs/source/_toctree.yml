@@ -6,6 +6,14 @@
   - local: quickstart
     title: Quickstart
   - sections:
+    - local: usage_guides/overview
+      title: Overview
+    - local: usage_guides/models
+      title: Modeling
+    - local: usage_guides/quantization
+      title: Quantization
+    title: How-To Guides
+  - sections:
     - local: package_reference/modeling
       title: FuriosaAI Models
     - local: package_reference/configuration

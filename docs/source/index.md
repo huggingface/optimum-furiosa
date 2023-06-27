@@ -21,19 +21,7 @@ It provides a set of tools enabling easy model loading and inference for differe
 
 <div class="mt-10">
   <div class="w-full flex flex-col space-y-4 md:space-y-0 md:grid md:grid-cols-2 md:gap-y-4 md:gap-x-5">
-    <a
-      class="!no-underline border dark:border-gray-700 p-5 rounded-lg shadow hover:shadow-lg"
-      href="./tutorials/overview"
-    >
-      <div class="w-full text-center bg-gradient-to-br from-blue-400 to-blue-500 rounded-lg py-1.5 font-semibold mb-5 text-white text-lg leading-relaxed">
-        Tutorials
-      </div>
-      <p class="text-gray-700">
-        Learn the basics and become familiar with deploying models on Furiosa NPUs.
-        Start here if you are using 🤗 Optimum Furiosa for the first time!
-      </p>
-    </a>
-    <a class="!no-underline border dark:border-gray-700 p-5 rounded-lg shadow hover:shadow-lg" href="./guides/overview">
+    <a class="!no-underline border dark:border-gray-700 p-5 rounded-lg shadow hover:shadow-lg" href="./usage_guides/overview">
       <div class="w-full text-center bg-gradient-to-br from-indigo-400 to-indigo-500 rounded-lg py-1.5 font-semibold mb-5 text-white text-lg leading-relaxed">
         How-to guides
       </div>
@@ -44,7 +32,7 @@ It provides a set of tools enabling easy model loading and inference for differe
     </a>
     <a
       class="!no-underline border dark:border-gray-700 p-5 rounded-lg shadow hover:shadow-lg"
-      href="./package_reference/modeling.mdx"
+      href="./package_reference/modeling"
     >
       <div class="w-full text-center bg-gradient-to-br from-purple-400 to-purple-500 rounded-lg py-1.5 font-semibold mb-5 text-white text-lg leading-relaxed">
         Reference
