@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   build_documentation:
-    runs-on: ubuntu-20.04
+    runs-on: self-hosted
     env:
       COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
       PR_NUMBER: ${{ github.event.number }}
@@ -33,8 +33,14 @@ jobs:
           repository: 'huggingface/optimum-furiosa'
           path: optimum-furiosa
 
+      - name: Create and start a virtual environment
+        run: |
+          python -m venv venv_docs
+          source venv_docs/bin/activate
+
       - name: Setup environment
         run: |
+          source venv_docs/bin/activate
           pip uninstall -y doc-builder
           cd doc-builder
           git pull origin main
@@ -44,12 +50,14 @@ jobs:
 
       - name: Make documentation
         run: |
+          source venv_docs/bin/activate
           cd optimum-furiosa
-          make doc BUILD_DIR=furiosa-doc-build VERSION=pr_$PR_NUMBER COMMIT_SHA_SUBPACKAGE=$COMMIT_SHA CLONE_URL=$PR_CLONE_URL
+          doc-builder build optimum.furiosa /optimum-furiosa/docs/source/ --build_dir furiosa-doc-build --version pr_$PR_NUMBER --version_tag_suffix "" --html --clean
           cd ..
 
       - name: Save commit_sha & pr_number
         run: |
+          source venv_docs/bin/activate
           cd optimum-furiosa
           sudo chmod -R ugo+rwx furiosa-doc-build
           cd furiosa-doc-build
@@ -61,3 +69,7 @@ jobs:
         with:
           name: doc-build-artifact
           path: optimum-furiosa/furiosa-doc-build/
+
+      - name: Cleanup
+        run: |
+         rm -rf venv_docs
