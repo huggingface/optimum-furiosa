@@ -1,0 +1,15 @@
+- sections:
+  - local: index
+    title: 🤗 Optimum Furiosa
+  - local: installation
+    title: Installation
+  - local: quickstart
+    title: Quickstart
+  - sections:
+    - local: package_reference/modeling
+      title: FuriosaAI Models
+    - local: package_reference/configuration
+      title: Configuration
+    title: Reference
+  title: Optimum Furiosa
+  isExpanded: false
