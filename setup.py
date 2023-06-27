@@ -15,6 +15,11 @@ INSTALL_REQUIRE = [
     "optimum>=1.8.0",
     "transformers>=4.20.0",
     "datasets>=1.4.0",
+    "furiosa-optimizer",
+    "furiosa-quantizer==0.9.0",
+    "furiosa-quantizer-impl==0.9.1",
+    "furiosa-sdk",
+    "onnx>=1.12.0",
     "sentencepiece",
     "scipy",
 ]
