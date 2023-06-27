@@ -7,7 +7,8 @@ RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
     git \
-    curl
+    curl \
+    libnux-4.0-0
 
 # Need node to build doc HTML. Taken from https://stackoverflow.com/a/67491580
 RUN apt-get update && apt-get install -y \
