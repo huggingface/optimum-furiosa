@@ -37,6 +37,7 @@ jobs:
         run: |
           python -m venv venv_docs
           source venv_docs/bin/activate
+          python -m pip install --upgrade pip
 
       - name: Setup environment
         run: |
@@ -47,11 +48,12 @@ jobs:
           pip install .
           pip install black
           cd ..
+          cd optimum-furiosa
+          pip install .
 
       - name: Make documentation
         run: |
           source venv_docs/bin/activate
-          cd optimum-furiosa
           doc-builder build optimum.furiosa /optimum-furiosa/docs/source/ --build_dir furiosa-doc-build --version pr_$PR_NUMBER --version_tag_suffix "" --html --clean
           cd ..
 
