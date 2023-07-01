@@ -63,7 +63,6 @@ jobs:
         run: |
           source venv_docs/bin/activate
           cd optimum-furiosa
-          sudo chmod -R ugo+rwx furiosa-doc-build
           cd furiosa-doc-build
           sudo mv optimum.furiosa optimum-furiosa
           echo ${{ env.COMMIT_SHA }} > ./commit_sha
