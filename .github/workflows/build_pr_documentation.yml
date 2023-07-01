@@ -62,8 +62,7 @@ jobs:
       - name: Save commit_sha & pr_number
         run: |
           source venv_docs/bin/activate
-          cd optimum-furiosa
-          cd furiosa-doc-build
+          cd optimum-furiosa/furiosa-doc-build
           sudo mv optimum.furiosa optimum-furiosa
           echo ${{ env.COMMIT_SHA }} > ./commit_sha
           echo ${{ env.PR_NUMBER }} > ./pr_number
