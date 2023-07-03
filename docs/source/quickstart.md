@@ -26,7 +26,7 @@ Static quantization relies on feeding batches of data through the model to estim
 
 ```python
 >>> from functools import partial
->>> from optimum.onnxruntime.configuration import AutoCalibrationConfig
+>>> from optimum.furiosa.configuration import AutoCalibrationConfig
 
 # Define the processing function to apply to each example after loading the dataset
 >>> def preprocess_fn(ex, tokenizer):

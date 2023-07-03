@@ -126,10 +126,10 @@ class FuriosaAIQuantizer(OptimumQuantizer):
         Instantiates a `FuriosaAIQuantizer` from a model path.
 
         Args:
-            model_or_path (`Union[ORTModel, str, Path]`):
+            model_or_path (`Union[FuriosaAIModel, str, Path]`):
                 Can be either:
                     - A path to a saved exported ONNX Intermediate Representation (IR) model, e.g., `./my_model_directory/.
-                    - Or an `ORTModelForXX` class, e.g., `ORTModelForQuestionAnswering`.
+                    - Or an `FuriosaAIModelModelForXX` class, e.g., `FuriosaAIModelModelForImageClassification`.
             file_name(`Optional[str]`, *optional*):
                 Overwrites the default model file name from `"model.onnx"` to `file_name`.
                 This allows you to load different model files from the same repository or directory.

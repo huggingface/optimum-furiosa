@@ -15,9 +15,11 @@
     title: How-To Guides
   - sections:
     - local: package_reference/modeling
-      title: FuriosaAI Models
+      title: Models
     - local: package_reference/configuration
       title: Configuration
+    - local: package_reference/quantization
+      title: Quantization
     title: Reference
   title: Optimum Furiosa
   isExpanded: false
