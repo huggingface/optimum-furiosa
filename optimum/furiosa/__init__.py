@@ -26,10 +26,12 @@ _import_structure = {
         "QuantizationConfig",
     ],
     "modeling": [
+        "FuriosaAIModel",
         "FuriosaAIModelForImageClassification",
     ],
     "quantization": ["FuriosaAIQuantizer"],
     "utils": ["export_model_to_onnx"],
+    "version": ["__version__"],
 }
 
 # Direct imports for type-checking
@@ -40,6 +42,7 @@ if TYPE_CHECKING:
     )
     from .quantization import FuriosaAIQuantizer
     from .utils import export_model_to_onnx
+    from .version import __version__
 else:
     import sys
 

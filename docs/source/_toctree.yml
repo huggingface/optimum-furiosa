@@ -1,0 +1,25 @@
+- sections:
+  - local: index
+    title: 🤗 Optimum Furiosa
+  - local: installation
+    title: Installation
+  - local: quickstart
+    title: Quickstart
+  - sections:
+    - local: usage_guides/overview
+      title: Overview
+    - local: usage_guides/models
+      title: Modeling
+    - local: usage_guides/quantization
+      title: Quantization
+    title: How-To Guides
+  - sections:
+    - local: package_reference/modeling
+      title: Models
+    - local: package_reference/configuration
+      title: Configuration
+    - local: package_reference/quantization
+      title: Quantization
+    title: Reference
+  title: Optimum Furiosa
+  isExpanded: false
