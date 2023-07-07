@@ -66,7 +66,7 @@ class FuriosaAIBaseModel(OptimizedModel):
         self.model = model
 
         if enable_compilation:
-            self.model = self.load_model(model, input_shape_dict, output_shape_dict)
+            self.model = self.compile(model, input_shape_dict, output_shape_dict)
 
         self.create_session()
 
