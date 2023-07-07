@@ -21,10 +21,10 @@ from furiosa.runtime.tensor import DataType
 from optimum.exporters.onnx import main_export
 
 
-FAI_ENF_FILE_NAME = "furiosa_model.enf"
-
 ONNX_WEIGHTS_NAME = "model.onnx"
 ONNX_WEIGHTS_NAME_STATIC = "model_static.onnx"
+FURIOSA_ENF_FILE_NAME = "model.enf"
+FURIOSA_QUANTIZED_FILE_NAME = "model_quantized.dfg"
 
 MAX_ONNX_OPSET_2022_2_0 = 10
 MAX_ONNX_OPSET = 13

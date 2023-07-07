@@ -53,7 +53,7 @@ MODEL_START_DOCSTRING = r"""
             The device type for which the model will be optimized for. The resulting compiled model will contains nodes specific to this device.
         furiosa_config (`Optional[Dict]`, defaults to `None`):
             The dictionnary containing the informations related to the model compilation.
-        compile (`bool`, defaults to `True`):
+        compile (`bool`, defaults to `False`):
             Disable the model compilation during the loading step when set to `False`.
 """
 
@@ -185,8 +185,6 @@ class FuriosaAIModelForImageClassification(FuriosaAIModel):
         pixel_values: Union[torch.Tensor, np.ndarray],
         **kwargs,
     ):
-        self.compile()
-
         np_inputs = isinstance(pixel_values, np.ndarray)
         if not np_inputs:
             pixel_values = np.array(pixel_values)
