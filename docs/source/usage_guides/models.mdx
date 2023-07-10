@@ -51,10 +51,10 @@ It is also possible, just as with regular [`~transformers.PreTrainedModel`]s, to
 ... )
 
 >>> # Save the converted model
->>> model.save_pretrained("a_local_path_for_convert_onnx_model")
+>>> model.save_pretrained("a_local_path_for_compiled_model")
 
-# Push the onnx model to HF Hub
+# Push the compiled model to HF Hub
 >>> model.push_to_hub(  # doctest: +SKIP
-...   "a_local_path_for_convert_onnx_model", repository_id="my-onnx-repo", use_auth_token=True
+...   "a_local_path_for_compiled_model", repository_id="my-furiosa-repo", use_auth_token=True
 ... )
 ```
