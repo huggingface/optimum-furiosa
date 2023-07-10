@@ -14,6 +14,7 @@
 
 import logging
 from pathlib import Path
+from shutil import copyfile
 from tempfile import TemporaryDirectory
 from typing import Dict, Optional, Tuple, Union
 
@@ -30,7 +31,14 @@ from optimum.exporters import TasksManager
 from optimum.exporters.onnx import main_export
 from optimum.modeling_base import OptimizedModel
 
-from .utils import FURIOSA_ENF_FILE_NAME, FURIOSA_QUANTIZED_FILE_NAME, ONNX_WEIGHTS_NAME, ONNX_WEIGHTS_NAME_STATIC
+from .utils import (
+    FURIOSA_ENF_FILE_NAME,
+    FURIOSA_QUANTIZED_FILE_NAME,
+    ONNX_WEIGHTS_NAME,
+    ONNX_WEIGHTS_NAME_STATIC,
+    maybe_load_preprocessors,
+    maybe_save_preprocessors,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -72,8 +80,12 @@ class FuriosaAIBaseModel(OptimizedModel):
 
     def _save_pretrained(self, save_directory: Union[str, Path], file_name: Optional[str] = None, **kwargs):
         dst_path = Path(save_directory) / FURIOSA_ENF_FILE_NAME
-        with open(dst_path, "wb") as f:
-            f.write(self.model)
+
+        if isinstance(self.model, (str, Path)):
+            copyfile(self.model, dst_path)
+        else:
+            with open(dst_path, "wb") as f:
+                f.write(self.model)
 
     def create_session(self):
         """
@@ -100,6 +112,7 @@ class FuriosaAIBaseModel(OptimizedModel):
         force_download: bool = False,
         cache_dir: Optional[str] = None,
         file_name: Optional[str] = None,
+        subfolder: str = "",
         from_onnx: bool = False,
         from_quantized: bool = False,
         local_files_only: bool = False,
@@ -117,16 +130,18 @@ class FuriosaAIBaseModel(OptimizedModel):
                     - The path to a directory containing the model weights.
             config (PretrainedConfig):
                 The configuration object associated with the model.
-            use_auth_token (Optional[Union[bool, str, None]], defaults to None):
+            use_auth_token (Union[bool, str, None], defaults to None):
                 The token to use as HTTP bearer authorization for remote files. Needed to load models from a private repository.
-            revision (Optional[Union[str, None]], defaults to None):
+            revision (Union[str, None], defaults to None):
                 The specific model version to use. It can be a branch name, a tag name, or a commit ID.
             force_download (bool, defaults to False):
                 Whether or not to force the (re-)download of the model weights and configuration files, overriding the cached versions if they exist.
-            cache_dir (Optional[str], defaults to None):
+            cache_dir (str, defaults to None):
                 The path to a directory in which a downloaded pretrained model configuration should be cached if the standard cache should not be used.
-            file_name (Optional[str], defaults to None):
+            file_name (str, defaults to None):
                 The file name of the model to load. Overwrites the default file name and allows one to load the model with a different name.
+            subfolder (str, defaults to ""):
+                The subfolder to load the model.
             from_onnx (bool, defaults to False):
                 Whether the model is being loaded from an ONNX file.
             from_quantized (bool, defaults to False):
@@ -156,11 +171,13 @@ class FuriosaAIBaseModel(OptimizedModel):
         if Path(model_id).is_dir():
             file_path = Path(model_id) / file_name
             model_save_dir = model_id
+            preprocessors = maybe_load_preprocessors(model_id)
         # Download the model from the hub
         else:
             file_path = hf_hub_download(
                 repo_id=model_id,
                 filename=file_name,
+                subfolder=subfolder,
                 use_auth_token=use_auth_token,
                 revision=revision,
                 cache_dir=cache_dir,
@@ -168,10 +185,13 @@ class FuriosaAIBaseModel(OptimizedModel):
                 local_files_only=local_files_only,
             )
             model_save_dir = Path(file_path).parent
+            preprocessors = maybe_load_preprocessors(model_id, subfolder=subfolder)
 
         model = cls.load_model(file_path, input_shape_dict, output_shape_dict)
 
-        return cls(model, config=config, model_save_dir=model_save_dir, compile=False, **kwargs)
+        return cls(
+            model, config=config, model_save_dir=model_save_dir, compile=False, preprocessors=preprocessors, **kwargs
+        )
 
     @classmethod
     def _from_transformers(
@@ -227,6 +247,7 @@ class FuriosaAIBaseModel(OptimizedModel):
         )
 
         config.save_pretrained(save_dir_path)
+        maybe_save_preprocessors(model_id, save_dir_path, src_subfolder=subfolder)
 
         return cls._from_pretrained(
             model_id=save_dir_path,

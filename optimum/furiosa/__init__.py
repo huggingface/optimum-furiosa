@@ -16,6 +16,8 @@ from typing import TYPE_CHECKING
 
 from transformers.utils import OptionalDependencyNotAvailable, _LazyModule
 
+from .utils import FURIOSA_ENF_FILE_NAME
+
 
 _import_structure = {
     "configuration": [
@@ -30,7 +32,9 @@ _import_structure = {
         "FuriosaAIModelForImageClassification",
     ],
     "quantization": ["FuriosaAIQuantizer"],
-    "utils": ["export_model_to_onnx"],
+    "utils": [
+        "export_model_to_onnx",
+    ],
     "version": ["__version__"],
 }
 
