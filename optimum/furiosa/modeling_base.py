@@ -56,7 +56,7 @@ class FuriosaAIBaseModel(OptimizedModel):
 
     def __init__(
         self,
-        model: Union[bytes, str],
+        model: Union[bytes, str, Path],
         config: PretrainedConfig = None,
         device: str = None,
         furiosa_config: Optional[Dict[str, str]] = None,
