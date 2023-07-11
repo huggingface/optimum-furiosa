@@ -185,8 +185,6 @@ class FuriosaAIModelForImageClassification(FuriosaAIModel):
         pixel_values: Union[torch.Tensor, np.ndarray],
         **kwargs,
     ):
-        self.compile()
-
         np_inputs = isinstance(pixel_values, np.ndarray)
         if not np_inputs:
             pixel_values = np.array(pixel_values)

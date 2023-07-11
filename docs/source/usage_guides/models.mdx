@@ -15,6 +15,8 @@ Because the model you want to work with might not be already converted to ONNX, 
 includes a method to convert vanilla Hugging Face models to ONNX ones. Simply pass `export=True` to the
 [`~optimum.furiosa.FuriosaAIModel.from_pretrained`] method, and your model will be loaded and converted to ONNX on-the-fly:
 
+### Loading and inference of a vanilla Transformers model
+
 ```diff
 import requests
 from PIL import Image
@@ -32,4 +34,27 @@ model_id = "microsoft/resnet-50"
 feature_extractor = AutoFeatureExtractor.from_pretrained(model_id)
 cls_pipe = pipeline("image-classification", model=model, feature_extractor=feature_extractor)
 outputs = cls_pipe(image)
+```
+
+
+### Pushing compiled models to the Hugging Face Hub
+
+It is also possible, just as with regular [`~transformers.PreTrainedModel`]s, to push your `FurisoaAIModelForXXX` to the
+[Hugging Face Model Hub](https://hf.co/models):
+
+```python
+>>> from optimum.furiosa import FuriosaAIModelForImageClassification
+
+>>> # Load the model from the hub
+>>> model = FuriosaAIModelForImageClassification.from_pretrained(
+...     "microsoft/resnet-50", export=True, input_shape_dict={"pixel_values": [1, 3, 224, 224]}, output_shape_dict={"logits": [1, 1000]},
+... )
+
+>>> # Save the converted model
+>>> model.save_pretrained("a_local_path_for_compiled_model")
+
+# Push the compiled model to HF Hub
+>>> model.push_to_hub(  # doctest: +SKIP
+...   "a_local_path_for_compiled_model", repository_id="my-furiosa-repo", use_auth_token=True
+... )
 ```

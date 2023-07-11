@@ -28,9 +28,10 @@ an easy end-to-end example on how to quantize statically
 
 ```python
 >>> from functools import partial
->>> from transformers import AutoTokenizer
+>>> from pathlib import Path
+>>> from transformers import AutoFeatureExtractor
 >>> from optimum.furiosa import FuriosaAIQuantizer, FuriosaAIModelForImageClassification
->>> from optimum.furiosa.configuration import AutoQuantizationConfig, AutoCalibrationConfig
+>>> from optimum.furiosa.configuration import AutoCalibrationConfig
 >>> from optimum.furiosa.utils import export_model_to_onnx
 
 >>> model_id = "eugenecamus/resnet-50-base-beans-demo"
@@ -43,6 +44,7 @@ an easy end-to-end example on how to quantize statically
 >>> image_size = feature_extractor.size["shortest_edge"]
 >>> num_labels = 3
 >>> onnx_model_name = "model.onnx"
+>>> output_dir = "output"
 >>> onnx_model_path = Path(output_dir) / onnx_model_name
 
 >>> export_model_to_onnx(
@@ -77,7 +79,7 @@ an easy end-to-end example on how to quantize statically
 
 # Apply static quantization on the model
 >>> model_quantized_path = quantizer.quantize(
-...     save_dir="path/to/output/model",
+...     save_dir=output,
 ...     calibration_tensors_range=ranges,
 ...     quantization_config=qconfig,
 ... )

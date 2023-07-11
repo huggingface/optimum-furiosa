@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import gc
+import os
+import tempfile
 import unittest
 
 import numpy as np
@@ -23,6 +25,7 @@ from PIL import Image
 from transformers import AutoFeatureExtractor, AutoModelForImageClassification, PretrainedConfig, pipeline, set_seed
 
 from optimum.furiosa import FuriosaAIModelForImageClassification
+from optimum.furiosa.utils import FURIOSA_ENF_FILE_NAME
 from optimum.utils import (
     logging,
 )
@@ -47,6 +50,31 @@ TENSOR_ALIAS_TO_TYPE = {
     "pt": torch.Tensor,
     "np": np.ndarray,
 }
+
+
+class FuriosaAIModelIntegrationTest(unittest.TestCase):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.MODEL_ID = "mohitsha/furiosa-resnet-tiny-beans"
+
+    def test_load_from_hub_and_save_model(self):
+        preprocessor = AutoFeatureExtractor.from_pretrained(self.MODEL_ID)
+        url = "http://images.cocodataset.org/val2017/000000039769.jpg"
+        image = Image.open(requests.get(url, stream=True).raw)
+        inputs = preprocessor(images=image, return_tensors="pt")
+        loaded_model = FuriosaAIModelForImageClassification.from_pretrained(self.MODEL_ID)
+        self.assertIsInstance(loaded_model.config, PretrainedConfig)
+        loaded_model_outputs = loaded_model(**inputs)
+
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            loaded_model.save_pretrained(tmpdirname)
+            del loaded_model
+            folder_contents = os.listdir(tmpdirname)
+            self.assertTrue(FURIOSA_ENF_FILE_NAME in folder_contents)
+            model = FuriosaAIModelForImageClassification.from_pretrained(tmpdirname)
+
+        outputs = model(**inputs)
+        self.assertTrue(torch.equal(loaded_model_outputs.logits, outputs.logits))
 
 
 class FuriosaAIModelForImageClassificationIntegrationTest(unittest.TestCase):

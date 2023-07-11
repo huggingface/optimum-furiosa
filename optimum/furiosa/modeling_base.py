@@ -13,32 +13,33 @@
 #  limitations under the License.
 
 import logging
-import os
 from pathlib import Path
+from shutil import copyfile
 from tempfile import TemporaryDirectory
 from typing import Dict, Optional, Tuple, Union
 
 import onnx
 from huggingface_hub import hf_hub_download
-from huggingface_hub.utils import EntryNotFoundError
 from transformers import PretrainedConfig
 from transformers.file_utils import add_start_docstrings
 
 # Import Furiosa SDK
-import furiosa
 from furiosa import optimizer
 from furiosa.runtime import session
+from furiosa.tools.compiler.api import compile
 from optimum.exporters import TasksManager
-from optimum.exporters.onnx import export
+from optimum.exporters.onnx import main_export
 from optimum.modeling_base import OptimizedModel
 
-from .utils import ONNX_WEIGHTS_NAME, ONNX_WEIGHTS_NAME_STATIC
+from .utils import (
+    FURIOSA_ENF_FILE_NAME,
+    FURIOSA_QUANTIZED_FILE_NAME,
+    ONNX_WEIGHTS_NAME,
+    ONNX_WEIGHTS_NAME_STATIC,
+    maybe_load_preprocessors,
+    maybe_save_preprocessors,
+)
 
-
-# if is_transformers_version("<", "4.25.0"):
-#     from transformers.generation_utils import GenerationMixin
-# else:
-#     from transformers.generation import GenerationMixin
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +56,7 @@ class FuriosaAIBaseModel(OptimizedModel):
 
     def __init__(
         self,
-        model: furiosa.runtime.model,
+        model: Union[bytes, str, Path],
         config: PretrainedConfig = None,
         device: str = None,
         furiosa_config: Optional[Dict[str, str]] = None,
@@ -67,27 +68,39 @@ class FuriosaAIBaseModel(OptimizedModel):
         self.config = config
         self.model_save_dir = model_save_dir
         self.furiosa_config = furiosa_config
+        self.preprocessors = kwargs.get("preprocessors", [])
         enable_compilation = kwargs.get("compile", True)
 
         self.model = model
-        self.sess = None
 
-        self.input_shape_dict = input_shape_dict
-        self.output_shape_dict = output_shape_dict
-        self.compile(enable_compilation)
+        if enable_compilation:
+            self.model = self.compile(model, input_shape_dict, output_shape_dict)
 
-    def _check_is_dynamic(self):
-        has_dynamic = False
-        if isinstance(self.model, str) and self.model.endswith(".onnx"):
-            model = onnx.load(self.model)
-            has_dynamic = any(
-                any(dim.dim_param for dim in inp.type.tensor_type.shape.dim) for inp in model.graph.input
-            )
-
-        return has_dynamic
+        self.create_session()
 
     def _save_pretrained(self, save_directory: Union[str, Path], file_name: Optional[str] = None, **kwargs):
-        pass
+        dst_path = Path(save_directory) / FURIOSA_ENF_FILE_NAME
+
+        if isinstance(self.model, (str, Path)):
+            copyfile(self.model, dst_path)
+        else:
+            with open(dst_path, "wb") as f:
+                f.write(self.model)
+
+    def create_session(self):
+        """
+        Create a Furiosa runtime session for the model.
+
+        Creates a session object using the Furiosa runtime for executing the model.
+
+        Returns:
+            None
+        """
+        self.sess = session.create(self.model)
+        self.input_num = self.sess.input_num
+        self.inputs_to_dtype = []
+        for i in range(self.input_num):
+            self.inputs_to_dtype.append(self.sess.input(i).dtype)
 
     @classmethod
     def _from_pretrained(
@@ -99,68 +112,86 @@ class FuriosaAIBaseModel(OptimizedModel):
         force_download: bool = False,
         cache_dir: Optional[str] = None,
         file_name: Optional[str] = None,
+        subfolder: str = "",
         from_onnx: bool = False,
+        from_quantized: bool = False,
         local_files_only: bool = False,
+        input_shape_dict: Optional[Dict[str, Tuple[int]]] = None,
+        output_shape_dict: Optional[Dict[str, Tuple[int]]] = None,
         **kwargs,
     ):
         """
-        Loads a model and its configuration file from a directory or the HF Hub.
+        Loads a model and its configuration file from a directory or the Hugging Face Hub.
 
-        Arguments:
-            model_id (`str` or `Path`):
-                The directory from which to load the model.
-                Can be either:
-                    - The model id of a pretrained model hosted inside a model repo on huggingface.co.
+        Args:
+            model_id (Union[str, Path]):
+                The directory from which to load the model. Can be either:
+                    - The model ID of a pretrained model hosted inside a model repo on huggingface.co.
                     - The path to a directory containing the model weights.
-            use_auth_token (`str` or `bool`):
-                The token to use as HTTP bearer authorization for remote files. Needed to load models from a private
-                repository.
-            revision (`str`, *optional*):
-                The specific model version to use. It can be a branch name, a tag name, or a commit id.
-            cache_dir (`Union[str, Path]`, *optional*):
-                The path to a directory in which a downloaded pretrained model configuration should be cached if the
-                standard cache should not be used.
-            force_download (`bool`, defaults to `False`):
-                Whether or not to force the (re-)download of the model weights and configuration files, overriding the
-                cached versions if they exist.
-            file_name(`str`, *optional*):
-                The file name of the model to load. Overwrites the default file name and allows one to load the model
-                with a different name.
-            local_files_only(`bool`, *optional*, defaults to `False`):
+            config (PretrainedConfig):
+                The configuration object associated with the model.
+            use_auth_token (Union[bool, str, None], defaults to None):
+                The token to use as HTTP bearer authorization for remote files. Needed to load models from a private repository.
+            revision (Union[str, None], defaults to None):
+                The specific model version to use. It can be a branch name, a tag name, or a commit ID.
+            force_download (bool, defaults to False):
+                Whether or not to force the (re-)download of the model weights and configuration files, overriding the cached versions if they exist.
+            cache_dir (str, defaults to None):
+                The path to a directory in which a downloaded pretrained model configuration should be cached if the standard cache should not be used.
+            file_name (str, defaults to None):
+                The file name of the model to load. Overwrites the default file name and allows one to load the model with a different name.
+            subfolder (str, defaults to ""):
+                The subfolder to load the model.
+            from_onnx (bool, defaults to False):
+                Whether the model is being loaded from an ONNX file.
+            from_quantized (bool, defaults to False):
+                Whether the model is being loaded from a quantized file.
+            local_files_only (bool, defaults to False):
                 Whether or not to only look at local files (i.e., do not try to download the model).
+            input_shape_dict (Dict[str, Tuple[int]], defaults to None):
+                A dictionary specifying the input shapes for dynamic models.
+            output_shape_dict (Dict[str, Tuple[int]], defaults to None):
+                A dictionary specifying the output shapes for dynamic models.
+            **kwargs:
+                Additional keyword arguments to be passed to the underlying model loading function.
+
+        Returns:
+            An instance of the model class loaded from the specified directory or Hugging Face Hub.
         """
-        default_file_name = ONNX_WEIGHTS_NAME
+        if from_onnx:
+            default_file_name = ONNX_WEIGHTS_NAME
+        elif from_quantized:
+            default_file_name = FURIOSA_QUANTIZED_FILE_NAME
+        else:
+            default_file_name = FURIOSA_ENF_FILE_NAME
+
         file_name = file_name or default_file_name
 
         # Load the model from local directory
-        if os.path.isdir(model_id):
-            file_name = os.path.join(model_id, file_name)
-            if os.path.isfile(os.path.join(model_id, ONNX_WEIGHTS_NAME)):
-                file_name = os.path.join(model_id, ONNX_WEIGHTS_NAME)
-
-            model = file_name
+        if Path(model_id).is_dir():
+            file_path = Path(model_id) / file_name
             model_save_dir = model_id
+            preprocessors = maybe_load_preprocessors(model_id)
         # Download the model from the hub
         else:
-            model_file_names = [file_name]
-            file_names = []
-            try:
-                for file_name in model_file_names:
-                    model_cache_path = hf_hub_download(
-                        repo_id=model_id,
-                        filename=file_name,
-                        use_auth_token=use_auth_token,
-                        revision=revision,
-                        cache_dir=cache_dir,
-                        force_download=force_download,
-                        local_files_only=local_files_only,
-                    )
-                    file_names.append(model_cache_path)
-            except EntryNotFoundError:
-                raise
-            model_save_dir = Path(model_cache_path).parent
-            model = file_names[0]
-        return cls(model, config=config, model_save_dir=model_save_dir, **kwargs)
+            file_path = hf_hub_download(
+                repo_id=model_id,
+                filename=file_name,
+                subfolder=subfolder,
+                use_auth_token=use_auth_token,
+                revision=revision,
+                cache_dir=cache_dir,
+                force_download=force_download,
+                local_files_only=local_files_only,
+            )
+            model_save_dir = Path(file_path).parent
+            preprocessors = maybe_load_preprocessors(model_id, subfolder=subfolder)
+
+        model = cls.load_model(file_path, input_shape_dict, output_shape_dict)
+
+        return cls(
+            model, config=config, model_save_dir=model_save_dir, compile=False, preprocessors=preprocessors, **kwargs
+        )
 
     @classmethod
     def _from_transformers(
@@ -197,37 +228,26 @@ class FuriosaAIBaseModel(OptimizedModel):
         if task is None:
             task = cls._auto_model_to_task(cls.auto_model_class)
 
-        model_kwargs = {
-            "revision": revision,
-            "use_auth_token": use_auth_token,
-            "cache_dir": cache_dir,
-            "subfolder": subfolder,
-            "local_files_only": local_files_only,
-            "force_download": force_download,
-        }
-
-        model = TasksManager.get_model_from_task(task, model_id, **model_kwargs)
-
-        model_type = model.config.model_type.replace("_", "-")
-        onnx_config_class = TasksManager.get_exporter_config_constructor(
-            exporter="onnx",
-            model=model,
-            task=task,
-            model_name=model_id,
-            model_type=model_type,
-        )
-
-        onnx_config = onnx_config_class(model.config)
         save_dir = TemporaryDirectory()
         save_dir_path = Path(save_dir.name)
 
         # Export the model to the ONNX format
-        export(
-            model=model,
-            config=onnx_config,
-            opset=onnx_config.DEFAULT_ONNX_OPSET,
-            output=save_dir_path / ONNX_WEIGHTS_NAME,
+        main_export(
+            model_name_or_path=model_id,
+            output=save_dir_path,
+            task=task,
+            do_validation=False,
+            no_post_process=True,
+            subfolder=subfolder,
+            revision=revision,
+            cache_dir=cache_dir,
+            use_auth_token=use_auth_token,
+            local_files_only=local_files_only,
+            force_download=force_download,
         )
+
+        config.save_pretrained(save_dir_path)
+        maybe_save_preprocessors(model_id, save_dir_path, src_subfolder=subfolder)
 
         return cls._from_pretrained(
             model_id=save_dir_path,
@@ -241,61 +261,142 @@ class FuriosaAIBaseModel(OptimizedModel):
             **kwargs,
         )
 
-    def compile(self, enable_compilation=True):
-        """
-        Compiles the model to the Furiosa binary.
-
-        Arguments:
-            enable_compilation (`bool`):
-                Enable / disable compilation of the model.
-        """
-        if enable_compilation and self.sess is None:
-            self.is_dynamic = self._check_is_dynamic()
-            if self.is_dynamic:
-                self._reshape(self.model, self.input_shape_dict, self.output_shape_dict)
-
-            logger.info("Compiling the model and creating the session ...")
-            self.sess = session.create(self.model)
-
-            self.input_num = self.sess.input_num
-
-            self.inputs_to_dtype = []
-            for i in range(self.input_num):
-                self.inputs_to_dtype.append(self.sess.input(i).dtype)
-
-    def _reshape(
-        self,
-        model_path,
-        input_shape_dict,
-        output_shape_dict,
+    @classmethod
+    def load_model(
+        cls,
+        model_path: Union[str, Path],
+        input_shape_dict: Optional[Dict[str, Tuple[int]]] = None,
+        output_shape_dict: Optional[Dict[str, Tuple[int]]] = None,
     ):
         """
-        Propagates the given input shapes on the model's layers, fixing the inputs shapes of the model.
+        Loads and processes a model for use with the Furiosa framework.
 
-        Arguments:
-            model_path (`int`):
-                Path to the model.
-            input_shape_dict (`int`):
-                Input shapes for the model.
-            output_shape_dict (`int`):
-                Output shapes for the model.
+        Args:
+            model_path (Union[str, Path]):
+                The path to the model file.
+            input_shape_dict (Dict[str, Tuple[int]], defaults to None):
+                A dictionary specifying the input shapes for dynamic models.
+            output_shape_dict (Dict[str, Tuple[int]], defaults to None):
+                A dictionary specifying the output shapes for dynamic models.
+
+        Returns:
+            If the model is in the 'onnx' or 'dfg' format, the compiled model in the Furiosa binary format is returned.
+            If the model is in the 'enf' format, the model path is returned as-is.
+
+        Raises:
+            ValueError: If the model format is not supported or invalid.
         """
-        if isinstance(model_path, str) and model_path.endswith(".onnx"):
-            if input_shape_dict is None or output_shape_dict is None:
-                raise ValueError(
-                    "The model provided has dynamic axes in input / output, please provide input and output shapes for compilation!"
-                )
-            from onnx import shape_inference
-            from onnx.tools import update_model_dims
+        model_path = Path(model_path)
+        if model_path.suffix in (".onnx", ".dfg"):
+            compiled_model = cls.compile(model_path, input_shape_dict, output_shape_dict)
+            return compiled_model
+        if model_path.suffix == ".enf":
+            return model_path
 
+        raise ValueError("Invalid model types. Supported formats are 'onnx', 'dfg', or 'enf'.")
+
+    @classmethod
+    def compile(
+        cls,
+        model: Union[str, Path, bytes],
+        input_shape_dict: Optional[Dict[str, Tuple[int]]] = None,
+        output_shape_dict: Optional[Dict[str, Tuple[int]]] = None,
+    ):
+        """
+        Compiles the model to the Furiosa binary format.
+
+        Args:
+            model (Union[str, Path]):
+                The model to be compiled.
+            input_shape_dict (Dict[str, Tuple[int]], defaults to None):
+                A dictionary specifying the input shapes for dynamic models.
+            output_shape_dict (Dict[str, Tuple[int]], defaults to None):
+                A dictionary specifying the output shapes for dynamic models.
+        Returns:
+            The compiled model in the Furiosa binary format.
+
+        Raises:
+            ValueError: If the model format is not supported or invalid.
+        """
+        if isinstance(model, (str, Path)):
+            model = cls._reshape(model, input_shape_dict, output_shape_dict)
+            input_bytes = Path(model).read_bytes()
+        else:
+            input_bytes = model
+
+        logger.info("Compiling the model...")
+        compiled_model = compile(input_bytes, target_ir="enf")
+        return compiled_model
+
+    @staticmethod
+    def _check_is_dynamic(model_path: Union[str, Path]):
+        is_dynamic = False
+        if Path(model_path).suffix == ".onnx":
             model = onnx.load(model_path)
-            updated_model = update_model_dims.update_inputs_outputs_dims(model, input_shape_dict, output_shape_dict)
-            inferred_model = shape_inference.infer_shapes(updated_model)
+            is_dynamic = any(any(dim.dim_param for dim in inp.type.tensor_type.shape.dim) for inp in model.graph.input)
 
-            static_model_path = Path(model_path).parent / ONNX_WEIGHTS_NAME_STATIC
-            inferred_model = optimizer.frontend.onnx.optimize_model(inferred_model)
-            onnx.save(inferred_model, static_model_path)
-            self.model = static_model_path
+        return is_dynamic
+
+    @staticmethod
+    def optimize_model(model: onnx.ModelProto) -> Path:
+        return optimizer.frontend.onnx.optimize_model(model)
+
+    @staticmethod
+    def _update_inputs_outputs_dims(
+        model_path: Union[str, Path],
+        input_shape_dict: Dict[str, Tuple[int]],
+        output_shape_dict: Dict[str, Tuple[int]],
+    ) -> onnx.ModelProto:
+        from onnx import shape_inference
+        from onnx.tools import update_model_dims
+
+        model = onnx.load(model_path)
+
+        updated_model = update_model_dims.update_inputs_outputs_dims(model, input_shape_dict, output_shape_dict)
+        return shape_inference.infer_shapes(updated_model)
+
+    @classmethod
+    def _reshape(
+        cls,
+        model_path: Union[str, Path],
+        input_shape_dict: Dict[str, Tuple[int]],
+        output_shape_dict: Dict[str, Tuple[int]],
+    ) -> Union[str, Path]:
+        """
+        Propagates the given input shapes on the model's layers, fixing the input shapes of the model.
+
+        Args:
+            model_path (Union[str, Path]):
+                Path to the model.
+            input_shape_dict (Dict[str, Tuple[int]]):
+                Input shapes for the model.
+            output_shape_dict (Dict[str, Tuple[int]]):
+                Output shapes for the model.
+
+        Returns:
+            Union[str, Path]:
+                Path to the model after updating the input shapes.
+
+        Raises:
+            ValueError: If the model provided has dynamic axes in input/output and no input/output shape is provided.
+        """
+        if isinstance(model_path, (str, Path)) and Path(model_path).suffix == ".onnx":
+            is_dynamic = cls._check_is_dynamic(model_path)
+            if is_dynamic:
+                if input_shape_dict is None or output_shape_dict is None:
+                    raise ValueError(
+                        "The model provided has dynamic axes in input/output. Please provide input and output shapes for compilation."
+                    )
+
+                model = cls._update_inputs_outputs_dims(model_path, input_shape_dict, output_shape_dict)
+                optimized_model = cls.optimize_model(model)
+
+                static_model_path = Path(model_path).parent / ONNX_WEIGHTS_NAME_STATIC
+                onnx.save(optimized_model, static_model_path)
+
+                return static_model_path
+
+        return model_path
 
     def forward(self, *args, **kwargs):
         raise NotImplementedError
