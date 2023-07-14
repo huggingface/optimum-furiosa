@@ -14,17 +14,19 @@
 
 
 from pathlib import Path
+from typing import List, Union
 
 import numpy as np
+from transformers import AutoFeatureExtractor, AutoProcessor, AutoTokenizer
 
 from furiosa.runtime.tensor import DataType
 from optimum.exporters.onnx import main_export
 
 
-FAI_ENF_FILE_NAME = "furiosa_model.enf"
-
 ONNX_WEIGHTS_NAME = "model.onnx"
 ONNX_WEIGHTS_NAME_STATIC = "model_static.onnx"
+FURIOSA_ENF_FILE_NAME = "model.enf"
+FURIOSA_QUANTIZED_FILE_NAME = "model_quantized.dfg"
 
 MAX_ONNX_OPSET_2022_2_0 = 10
 MAX_ONNX_OPSET = 13
@@ -58,3 +60,43 @@ def export_model_to_onnx(model_id, save_dir, input_shape_dict, output_shape_dict
 
     static_model_path = Path(save_dir_path).parent / file_name
     onnx.save(inferred_model, static_model_path)
+
+
+def maybe_load_preprocessors(src_name_or_path: Union[str, Path], subfolder: str = "") -> List:
+    preprocessors = []
+    try:
+        preprocessors.append(AutoTokenizer.from_pretrained(src_name_or_path, subfolder=subfolder))
+    except Exception:
+        pass
+
+    try:
+        preprocessors.append(AutoProcessor.from_pretrained(src_name_or_path, subfolder=subfolder))
+    except Exception:
+        pass
+
+    try:
+        preprocessors.append(AutoFeatureExtractor.from_pretrained(src_name_or_path, subfolder=subfolder))
+    except Exception:
+        pass
+    return preprocessors
+
+
+def maybe_save_preprocessors(src_name_or_path: Union[str, Path], dest_dir: Union[str, Path], src_subfolder: str = ""):
+    """
+    Saves the tokenizer, the processor and the feature extractor when found in `src_dir` in `dest_dir`.
+
+    Args:
+        src_dir (`Union[str, Path]`):
+            The source directory from which to copy the files.
+        dest_dir (`Union[str, Path]`):
+            The destination directory to copy the files to.
+        src_subfolder (`str`, defaults to `""`):
+            In case the preprocessor files are located inside a subfolder of the model directory / repo on the Hugging
+            Face Hub, you can specify the subfolder name here.
+    """
+    if not isinstance(dest_dir, Path):
+        dest_dir = Path(dest_dir)
+
+    dest_dir.mkdir(exist_ok=True)
+    for preprocessor in maybe_load_preprocessors(src_name_or_path, subfolder=src_subfolder):
+        preprocessor.save_pretrained(dest_dir)
