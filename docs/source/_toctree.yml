@@ -3,8 +3,6 @@
     title: 🤗 Optimum Furiosa
   - local: installation
     title: Installation
-  - local: quickstart
-    title: Quickstart
   - sections:
     - local: usage_guides/overview
       title: Overview
