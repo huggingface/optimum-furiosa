@@ -27,7 +27,6 @@ from transformers.file_utils import add_start_docstrings
 from furiosa import optimizer
 from furiosa.runtime import session
 from furiosa.tools.compiler.api import compile
-from optimum.exporters import TasksManager
 from optimum.exporters.onnx import main_export
 from optimum.modeling_base import OptimizedModel
 
@@ -399,4 +398,3 @@ class FuriosaAIBaseModel(OptimizedModel):
 
     def forward(self, *args, **kwargs):
         raise NotImplementedError
-
