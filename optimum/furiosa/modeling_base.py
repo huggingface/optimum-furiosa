@@ -50,7 +50,6 @@ logger = logging.getLogger(__name__)
     """,
 )
 class FuriosaAIBaseModel(OptimizedModel):
-    _AUTOMODELS_TO_TASKS = {cls_name: task for task, cls_name in TasksManager._TASKS_TO_AUTOMODELS.items()}
     auto_model_class = None
     export_feature = None
 
@@ -226,7 +225,7 @@ class FuriosaAIBaseModel(OptimizedModel):
                 kwargs will be passed to the model during initialization
         """
         if task is None:
-            task = cls._auto_model_to_task(cls.auto_model_class)
+            task = cls.export_feature
 
         save_dir = TemporaryDirectory()
         save_dir_path = Path(save_dir.name)
@@ -401,9 +400,3 @@ class FuriosaAIBaseModel(OptimizedModel):
     def forward(self, *args, **kwargs):
         raise NotImplementedError
 
-    @classmethod
-    def _auto_model_to_task(cls, auto_model_class):
-        """
-        Get the task corresponding to a class (for example AutoModelForXXX in transformers).
-        """
-        return cls._AUTOMODELS_TO_TASKS[auto_model_class.__name__]
