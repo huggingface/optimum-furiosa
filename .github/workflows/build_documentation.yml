@@ -71,11 +71,6 @@ jobs:
             deb [arch=amd64] https://archive.furiosa.ai/ubuntu jammy restricted
           EOT
           sudo apt update && sudo apt install -y furiosa-libnux
-
-      - name: Make documentation
-        shell: bash
-        run: |
-          source venv-doc/bin/activate
           doc-builder build optimum.furiosa docs/source/ \
             --repo_name optimum-furiosa \
             --build_dir furiosa-doc-build/ \
