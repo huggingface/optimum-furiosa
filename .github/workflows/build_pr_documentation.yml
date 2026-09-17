@@ -13,8 +13,12 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
 
+permissions: {}
+
 jobs:
   build_documentation:
+    permissions:
+      contents: read
     runs-on: self-hosted
     env:
       COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
@@ -23,12 +27,12 @@ jobs:
       PR_CLONE_URL: ${{ github.event.pull_request.head.repo.clone_url }}
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: 'huggingface/doc-builder'
           path: doc-builder
 
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: 'huggingface/optimum-furiosa'
           path: optimum-furiosa
@@ -67,7 +71,7 @@ jobs:
           echo ${{ env.COMMIT_SHA }} > ./commit_sha
           echo ${{ env.PR_NUMBER }} > ./pr_number
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: doc-build-artifact
           path: optimum-furiosa/furiosa-doc-build/

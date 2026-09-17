@@ -15,8 +15,12 @@ on:
       - "tests/**.py"
       - "examples/**.py"
 
+permissions: {}
+
 jobs:
   build:
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
